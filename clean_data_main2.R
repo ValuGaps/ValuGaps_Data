@@ -1,54 +1,115 @@
-rm(list=ls())
-
 library(tidyverse)
-library(readxl)
-library(ggpubr)
+library(purrr)
+# Function to determine the most preferred type
+choose_best_type <- function(types) {
+  if ("double" %in% types) {
+    return("as.numeric")  # Prioritize numeric
+  } else if ("integer" %in% types) {
+    return("as.numeric")  # Convert integer to numeric for consistency
+  } else {
+    return("as.character")  # If no numeric types, default to character
+  }
+}
 
-# source("Scripts/get_data.R")
+# Read all files into a list of data frames
+df_list <- list.files("data", full.names = TRUE, recursive = TRUE, pattern = "covariates") %>%
+  map(read_cov)
 
+# Ensure all datasets contain the 'samplename' column
+df_list <- map(df_list, ~ .x %>% mutate(samplename = as.character(samplename)))
 
-### 
-data_path <- "Data_and_Output/Data/Main_2/VALUGAPS_Main_2_Covariates_2024-12-24.xlsx" 
+# Extract column types for each dataset
+all_col_types_df <- map_dfr(df_list, function(df) {
+  tibble(
+    samplename = unique(df$samplename),
+    column = colnames(df),
+    type = sapply(df, class)
+  )
+})
+
+# Reshape to wide format for easier comparison
+all_col_types_wide <- all_col_types_df %>%
+  pivot_wider(names_from = samplename, values_from = type)
+
+# Determine the best type for each column
+best_types <- all_col_types_df %>%
+  group_by(column) %>%
+  summarise(best_type = choose_best_type(unique(type)), .groups = "drop") %>%
+  deframe()
+
+# Function to enforce correct types in each dataframe
+standardize_types <- function(df, best_types) {
+  # Add missing columns with the correct NA type
+  for (col in names(best_types)) {
+    if (!col %in% colnames(df)) {
+      df[[col]] <- if (best_types[[col]] == "as.numeric") NA_real_ else NA_character_
+    }
+  }
+  
+  # Apply type conversion only to existing columns
+  df <- df %>%
+    mutate(across(all_of(intersect(names(df), names(best_types))), 
+                  ~ match.fun(best_types[[cur_column()]])(.x)))  # Removed .names to keep original names
+  
+  return(df)  # Ensure the modified df is returned
+}
+
+# Apply standardization to all data frames
+df_list <- map(df_list, ~ standardize_types(.x, best_types))
+
+# Bind rows with corrected types
+covariates <- bind_rows(df_list) %>%
+  select(RID, samplename, everything())
+
+# Get unique samplenames
+samplenames <- unique(covariates$samplename)
+
+# Assign numeric prefixes
+samplename_map <- setNames(seq_along(samplenames), samplenames)
+
+# Apply transformation to create unique numeric IDs
+covariates <- covariates %>% 
+                 mutate(
+                   unique_RID = (paste0(samplename,"_",  RID))
+                 ) %>%
+                 select(unique_RID, everything()) # Move unique_RID to the front
 
 
 addID <- 222 # id marker for new survey round to get unique ids
 
+
+
 raw_data <- read_excel(data_path) %>%
-  mutate(RID = paste0(RID, addID), RID = as.numeric(RID), 
+  mutate(RID = as.numeric(paste0(RID, addID)),  
          birthyralt_other = as.numeric(birthyralt_other),
          natvisit_next12m = as.character(natvisit_next12m),
          survey_round = "main2") 
 
 
-time_stamps <- read_excel("Data_and_Output/Data/Main_2/VALUGAPS_Main_2__Timestamps_2024-12-24.xlsx") %>% 
+time_stamps <- read_excel("data/Main_2/VALUGAPS_Main_2__Timestamps.xlsx") %>% 
   mutate(survey_round ="main2",  RID = paste0(RID, addID), RID = as.numeric(RID))
 
-choice_exp_1 <- read_xlsx("Data_and_Output/Data/Main_2/VALUGAPS_Main_2_DCE_Exp_2024-12-24.xlsx") 
-choice_exp_swap_1 <- read_xlsx("Data_and_Output/Data/Main_2/VALUGAPS_Main_2__DCE_Exp_Swap_2024-12-24.xlsx")
-choice_exp_2 <- read_xlsx("Data_and_Output/Data/Main_2/VALUGAPS_Main_2__DCE_Exp_2_2024-12-24.xlsx")
-choice_exp_swap_2 <- read_xlsx("Data_and_Output/Data/Main_2/VALUGAPS_Main_2__DCE_Exp_Swap_2_2024-12-24.xlsx")
+choice_exp_1 <- read_xlsx("data/Main_2/VALUGAPS_Main_2_DCE_Exp.xlsx") 
+choice_exp_swap_1 <- read_xlsx("data/Main_2/VALUGAPS_Main_2__DCE_Exp_Swap.xlsx")
+choice_exp_2 <- read_xlsx("data/Main_2/VALUGAPS_Main_2__DCE_Exp_2.xlsx")
+choice_exp_swap_2 <- read_xlsx("data/Main_2/VALUGAPS_Main_2__DCE_Exp_Swap_2.xlsx")
 
-table(choice_exp_1$pref1)
-table(choice_exp_swap_1$pref1)
-table(choice_exp_2$pref1)
-table(choice_exp_swap_2$pref1)
-
-choicedata_low <- read_xlsx("Data_and_Output/Data/Main_2/VALUGAPS_Main_2__DCE_Exp_Swap_2024-12-24.xlsx") %>% 
+choicedata_low <- read_xlsx("data/Main_2/VALUGAPS_Main_2__DCE_Exp_Swap.xlsx") %>% 
   mutate(pref1= case_when(
     pref1 == 1 ~ 2,
     pref1 == 2 ~ 1,
     TRUE ~ NA)
   ) %>% 
-  bind_rows(read_xlsx("Data_and_Output/Data/Main_2/VALUGAPS_Main_2_DCE_Exp_2024-12-24.xlsx"))
+  bind_rows(read_xlsx("data/Main_2/VALUGAPS_Main_2_DCE_Exp.xlsx"))
 
 
-choicedata_high <- read_xlsx("Data_and_Output/Data/Main_2/VALUGAPS_Main_2__DCE_Exp_Swap_2_2024-12-24.xlsx") %>% 
+choicedata_high <- read_xlsx("data/Main_2/VALUGAPS_Main_2__DCE_Exp_Swap_2.xlsx") %>% 
   mutate(pref1= case_when(
     pref1 == 1 ~ 2,
     pref1 == 2 ~ 1,
     TRUE ~ NA)
   ) %>% 
-  bind_rows(read_xlsx("Data_and_Output/Data/Main_2/VALUGAPS_Main_2__DCE_Exp_2_2024-12-24.xlsx"))
+  bind_rows(read_xlsx("data/Main_2/VALUGAPS_Main_2__DCE_Exp_2.xlsx"))
 
 
 ##### Combine data #####
@@ -96,11 +157,6 @@ raw_data <- raw_data %>%
 
 
 
-
-status_pl <- ggplot(data = raw_data) +
-  geom_histogram(aes(x=STATUS_recoded, fill=STATUS_recoded), stat = "count") +
-  scale_x_discrete(guide = guide_axis(angle = 45)) +
-  labs(fill = "Status")
 
 
 data <- raw_data %>% 
@@ -184,41 +240,7 @@ fullchoice_raw <- choicedata %>%
   left_join(raw_data,by = "RID")
 
 
-gender <- ggplot(data = data) +
-  geom_histogram(aes(x=gender, fill=as.factor(gender_chr)), stat = "count") +
-  scale_x_discrete(guide = guide_axis(angle = 45)) +
-  labs(fill = "Gender") +
-  xlab("")
-
-# Check and change if linke and fdp get selected
-
-data_voting <- data %>%
-  group_by(voting) %>%
-  summarise(count = n()) %>%
-  mutate(share = count / sum(count) * 100)
-
-data_voting_clean <- data %>% filter(pol_btw != 8) %>% 
-  group_by(voting) %>%
-  summarise(count = n()) %>%
-  mutate(share = count / sum(count) * 100)
-
          
-voting_pl <- ggplot(data=data_voting) +
-  geom_bar(aes(x=voting, y=share, fill=as.factor(voting)), stat = "identity") +
-  scale_x_discrete(guide = guide_axis(angle = 45)) +
-  labs(fill = "Party", title="Which party would you vote for if there would be elections next Sunday?") +
-  xlab("") +
-  ylab("Share (%)") +
-  scale_fill_manual(values = c("black", "red", "mediumvioletred", "blue", "deeppink", "green3", "yellow", "white", "grey"))
-
-
-voting_pl_clean <- ggplot(data=data_voting_clean) +
-  geom_bar(aes(x=voting, y=share, fill=as.factor(voting)), stat = "identity") +
-  scale_x_discrete(guide = guide_axis(angle = 45)) +
-  labs(fill = "Party", title="Which party would you vote for if there would be elections next Sunday?") +
-  xlab("") +
-  ylab("Share (%)") +
-  scale_fill_manual(values = c("black", "red", "mediumvioletred", "blue", "deeppink", "green3", "yellow", "grey"))
 
 
 
@@ -247,110 +269,18 @@ voting_pl_diff <- ggplot(data=data_voting_diff) +
   ylab("Share (%)") +
   scale_fill_manual(values = c("black", "red", "mediumvioletred", "blue", "deeppink", "green3", "yellow", "grey"))
 
-hh_size <- ggplot(data = data) +
-  geom_boxplot(aes(x="HH Size", y=hhsize), outlier.shape = NA) +
-  coord_cartesian(ylim = c(0, 10)) +  # Adjust the limits based on your expected household sizes
-  geom_boxplot(aes(x="HH Size", y = hhsize)) +
-  ylab("Household Size") +
-  xlab("")
-  
-vg_hist <- function(d = data, var , xlabel = "Groups" , legendtit = "category"){
-
-  ggplot(d, aes(x = {{ var }}, fill = as.factor({{ var }}))) +
-    geom_histogram(stat = "count") +
-    scale_x_discrete(guide = guide_axis(angle = 45)) +
-    labs(fill = legendtit) +
-    xlab(xlabel) 
-}
-
-uhh_deck <- vg_hist(var = uhh, legendtit = "Random groups")
-
-dce_v <- vg_hist(var = dce_version, legendtit = "DCE groups")
-
-block <- vg_hist(var =block)
-
-tc_1 <- vg_hist(var=tc1,legendtit = "Visited place for Recreation last 12 month?" )
-tc_map_pl <- vg_hist(var=tc_map,legendtit = "Random groups TC map" )
-tc_timeline_pl <- vg_hist(var=tc_timeline,legendtit = "Random groups TC time" )
-tc_calc_pl <- vg_hist(var=tc_calc,legendtit = "Random groups TC calc" )
-tc_avg_pl <- vg_hist(var=tc_avg, legendtit = "Random groups Tc avg")
-
-tc_dog <- vg_hist(var = dog) + 
-  scale_fill_discrete(
-    labels = c("Yes with my dog", "No, but I own a dog", "No, I don't own a dog", "Other"),
-    name = "Answer"
-  )
-
-tc_dogowner <- vg_hist(var = dogowner) + 
-  scale_fill_discrete(
-    labels = c("Dogowner", "No dog", "N/A"),
-    name = "Answer"
-  )
-
-equity <- vg_hist(var = equity, legendtit = "Equity Sample") + 
-  scale_x_continuous(breaks = c(1, 2), labels = c("All same", "income tax"))
-
-
-paymentyears <- vg_hist(var = arm, legendtit = "Random groups: Years of payment") +
-  scale_x_continuous(breaks = c(1, 2, 3, 4),
-                     labels = c("5 years", "10 years", "20 years", "indefinitely"))
-
-block
-
-radius <- ggplot(data = data) +
-  geom_histogram(aes(x=radius, fill=as.factor(radius)), stat = "count") +
-  labs(fill = "Radius") +
-  xlab("Groups")
-
-##cross-randomizations
-variables <- c('uhh', 'dce_version', 'equity', 'arm', 'block', 'radius', 'order')
-
-# Initialize an empty matrix to store p-values
-p_value_matrix <- matrix(NA, nrow = length(variables), ncol = length(variables))
-rownames(p_value_matrix) <- variables
-colnames(p_value_matrix) <- variables
-
-# Function to run chi-squared test and extract p-value
-run_chisq_test <- function(var1, var2) {
-  table_data <- table(data[[var1]], data[[var2]])
-  test_result <- chisq.test(table_data)
-  return(test_result$p.value)
-}
-
-# Loop through each combination of variables and run the chi-squared test
-for (i in 1:length(variables)) {
-  for (j in 1:length(variables)) {
-    if (i != j) {
-      p_value_matrix[i, j] <- run_chisq_test(variables[i], variables[j])
-    }
-  }
-}
-
-# Display the p-value matrix
-cat("Chi-Squared Test P-Value Matrix:\n")
-print(p_value_matrix)
 
 
 
-age <- ggplot(data=data) +
-  geom_boxplot(aes(x=gender, y=birthyear, group =gender, fill=as.factor(gender_chr))) +
-  labs(fill="Gender")
 
-age_jitter <- ggplot(data = data) +
-  geom_jitter(aes(x = gender, y = birthyear, color = as.factor(gender_chr), group = gender), width = 0.2) +
-  labs(color = "Gender")
 
-ggplot(data=data) +
-  geom_boxplot(aes(x=gender, y=lifesat_recode, group =gender, fill=as.factor(gender_chr))) +
-  labs(fill = "Gender") 
 
-lifesat_etc <- ggplot(data = data) +
-  geom_boxplot(aes(x = factor("Life Sat"), y = lifesat_recode), fill = "lightcoral") +
-  geom_boxplot(aes(x = factor("Health Psych"), y = healthpsych_recode), fill = "lightblue") +
-  geom_boxplot(aes(x = factor("Health Phys"), y = healthphys_recode), fill = "lightgreen") +
-  xlab("") +
-  ylab("Value") +
-  ggtitle("Boxplots of Health and Life Satisfaction Variables")
+
+
+
+
+
+
 
 ##Question 1
 labels <- c(
@@ -362,26 +292,7 @@ labels <- c(
 )
 data$q10 <- factor(data$q10, levels = c(1, 2, 3, 4, 5))
 
-testqu1 <- ggplot(data, aes(x = q10, fill = q10)) +
-  geom_bar(color = "black") +
-  scale_x_discrete(labels = labels) +
-  scale_fill_manual(values = c(
-    "1" = "lightblue",
-    "2" = "lightblue",
-    "3" = "darkgreen",
-    "4" = "lightblue",
-    "5" = "lightblue"
-  )) +
-  labs(
-    title = "Q: How much of Germany's total area is agricultural land?",
-    x = "Answers",
-    y = "Count"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "none"  # Hide the legend if not needed
-  )
+
 
 ##Question 2
 #
@@ -408,27 +319,8 @@ hnv6_share <- calculate_share(data, "hnv6_miss", "hnv6_corr", "Wide Forest Roads
 # Combine all shares into one data frame
 share_data <- bind_rows(hnv1_share, hnv2_share, hnv3_share, hnv4_share, hnv5_share, hnv6_share)
 
-# Plot the combined shares with updated English labels and colors
-testqu2 <- ggplot(share_data, aes(x=Issue, y=share_corr, fill=Issue)) +
-  geom_bar(stat="identity", show.legend=FALSE) +
-  scale_fill_manual(values=c(
-    "Rich Small Water Bodies and Ditches"="forestgreen",
-    "Flower Strips"="forestgreen",
-    "Hedges"="forestgreen",
-    "Field Shrubs"="forestgreen",
-    "Straightened Rivers"="red",
-    "Wide Forest Roads"="red"
-  )) +
-  labs(
-    title = "Q: Which of these landscape elements are typically found on HNV farmland?",
-    x = "Landscape Element",
-    y = "Share of Correct Answers (%)"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "none"
-  )
+
+
 
 
 ##Question 3
@@ -439,91 +331,10 @@ labels <- c(
 )
 data$q14 <- factor(data$q14, levels = c(1, 2, 3))
 
-testqu3 <- ggplot(data, aes(x = q14, fill = q14)) +
-  geom_bar(color = "black") +
-  scale_x_discrete(labels = labels) +
-  scale_fill_manual(values = c(
-    "1" = "lightblue",
-    "2" = "lightblue",
-    "3" = "darkgreen"
-  )) +
-  labs(
-    title = "Q: How do PAs fulfil their protective function for biodiversity best?",
-    x = "Answers",
-    y = "Count"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "none"  # Hide the legend if not needed
-  )
 
 
-hhnetinc_histogram <- ggplot(data, aes(x = hhnetinc_numeric)) +
-  geom_histogram(binwidth = 500, fill = "coral", color = "black", alpha = 0.7) +
-  scale_x_continuous(
-    breaks = c(250, 750, 1250, 1750, 2250, 2750, 3250, 3750, 4500, 5500),
-    labels = c(
-      'less than 500 Euro',
-      '500 - 999 Euro',
-      '1000 - 1499 Euro',
-      '1500 - 1999 Euro',
-      '2000 - 2499 Euro',
-      '2500 - 2999 Euro',
-      '3000 - 3499 Euro',
-      '3500 - 3999 Euro',
-      '4000 - 4999 Euro',
-      'more than 5000 Euro'
-    )
-  ) +
-  labs(
-    title = "Histogram of Household Net Income",
-    x = "Household Net Income Bracket",
-    y = "Count"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.grid.major.x = element_blank(),  # Removes vertical grid lines
-    panel.grid.minor.x = element_blank(),  # Removes minor vertical grid lines
-    panel.grid.major.y = element_line(color = "gray90")  # Light horizontal grid lines
-  )
 
-hhnetinc_histogram_normal <- ggplot(data, aes(x = hhnetinc_numeric/hhsize)) +
-  geom_histogram(binwidth = 500, fill = "coral3", color = "black", alpha = 0.7) +
-  scale_x_continuous(
-    breaks = c(250, 750, 1250, 1750, 2250, 2750, 3250, 3750, 4500, 5500),
-    labels = c(
-      'less than 500 Euro',
-      '500 - 999 Euro',
-      '1000 - 1499 Euro',
-      '1500 - 1999 Euro',
-      '2000 - 2499 Euro',
-      '2500 - 2999 Euro',
-      '3000 - 3499 Euro',
-      '3500 - 3999 Euro',
-      '4000 - 4999 Euro',
-      'more than 5000 Euro'
-    )
-  ) +
-  labs(
-    title = "Histogram of Household Net Income considering Household Size",
-    x = "Household Net Income Bracket",
-    y = "Count"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.grid.major.x = element_blank(),  # Removes vertical grid lines
-    panel.grid.minor.x = element_blank(),  # Removes minor vertical grid lines
-    panel.grid.major.y = element_line(color = "gray90")  # Light horizontal grid lines
-  )
 
-hhnetinc_boxplot <- ggplot(data = data, aes(x = factor(1), y = hhnetinc_numeric)) +
-  geom_boxplot() +
-  xlab("") +
-  ylab("Household Net Income (Euro)") +
-  ggtitle("Boxplot of Household Net Income")
 
 educ_summary <- data %>%
   count(educ) %>%
@@ -547,172 +358,25 @@ total_pref1_scores <- total_pref1_scores %>%
 data <- data %>%
   left_join(total_pref1_scores %>% dplyr::select(RID, total_pref1, protester), by = "RID")
 
-frequency_table <- table(data$dce_version, data$protester)
-#print(frequency_table)
-
-
-data_prot <- data %>% filter(!is.na(protest_1))
-
-prot1_pl <- vg_hist(d=data_prot, var =protest_1_recode) + labs(title="Ich möchte kein Geld für den Schutz der Natur ausgeben.")
-prot2_pl <- vg_hist(d=data_prot, var =protest_2_recode) + labs(title="Jemand anderes sollte für den Schutz der Natur bezahlen.")
-prot3_pl <- vg_hist(d=data_prot, var =protest_3_recode) + labs(title="Ich war nicht ausreichend informiert.")
-prot4_pl <- vg_hist(d=data_prot, var =protest_4_recode) + labs(title="Ich habe Einwände gegen die Art und Weise, wie die Fragen gestellt wurden.")
-prot5_pl <- vg_hist(d=data_prot, var =protest_5_recode) + labs(title="Die angegebene Zahlungsmethode ist für mich unpassend.")
-
-
-prot1_pl_new <- ggplot(data_prot, aes(x = factor(protest_1_recode), fill = factor(protester > 1))) + geom_bar(position = position_dodge(preserve = "single")) + labs(title = "Ich möchte kein Geld für den Schutz der Natur ausgeben.", fill = "Protester Group", x = "Protest Question 1", y = "Count") + scale_fill_manual(values = c("#ff6c91", "#00c1a9"), labels = c("No Protester", "Protester")) + theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
-prot2_pl_new <- ggplot(data_prot, aes(x = factor(protest_2_recode), fill = factor(protester > 1))) + geom_bar(position = position_dodge(preserve = "single")) + labs(title="Jemand anderes sollte für den Schutz der Natur bezahlen.", fill = "Protester Group", x = "Protest Question 1", y = "Count") + scale_fill_manual(values = c("#ff6c91", "#00c1a9"), labels = c("No Protester", "Protester")) + theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
-prot3_pl_new <- ggplot(data_prot, aes(x = factor(protest_3_recode), fill = factor(protester > 1))) + geom_bar(position = position_dodge(preserve = "single")) + labs(title = "Ich war nicht ausreichend informiert.", fill = "Protester Group", x = "Protest Question 1", y = "Count") + scale_fill_manual(values = c("#ff6c91", "#00c1a9"), labels = c("No Protester", "Protester")) + theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
-prot4_pl_new <- ggplot(data_prot, aes(x = factor(protest_4_recode), fill = factor(protester > 1))) + geom_bar(position = position_dodge(preserve = "single")) + labs(title = "Ich habe Einwände gegen die Art und Weise, wie die Fragen gestellt wurden.", fill = "Protester Group", x = "Protest Question 1", y = "Count") + scale_fill_manual(values = c("#ff6c91", "#00c1a9"), labels = c("No Protester", "Protester")) + theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
-prot5_pl_new <- ggplot(data_prot, aes(x = factor(protest_5_recode), fill = factor(protester > 1))) + geom_bar(position = position_dodge(preserve = "single")) + labs(title = "Die angegebene Zahlungsmethode ist für mich unpassend.", fill = "Protester Group", x = "Protest Question 1", y = "Count") + scale_fill_manual(values = c("#ff6c91", "#00c1a9"), labels = c("No Protester", "Protester")) + theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-
-data_voting_supp <- data %>%
-  filter(protester < 2) %>%
-  group_by(voting) %>%
-  summarise(count = n()) %>%
-  mutate(share_supp = round(count / sum(count) * 100, 1))
-
-data_voting_prot <- data %>%
-  filter(protester > 1) %>%
-  group_by(voting) %>%
-  summarise(count = n()) %>%
-  mutate(share_prot = round(count / sum(count) * 100, 1)) %>%
-  left_join(data_voting %>% dplyr::select(voting, share), by = "voting") %>%  # Join data_voting to add the share column
-  left_join(data_voting_supp %>% dplyr::select(voting, share_supp), by = "voting") %>%  # Join data_voting_supp to add share_supp
-  mutate(diff_prot = share_prot - share_supp)
-
-data_voting_prot$voting <- factor(data_voting_prot$voting, levels = voting_order)
-
-voting_pl_prot <- ggplot(data=data_voting_prot) +
-  geom_bar(aes(x=voting, y=share_prot, fill=as.factor(voting)), stat = "identity") +
-  scale_x_discrete(guide = guide_axis(angle = 45)) +
-  labs(fill = "Party", title="Protesters subsample: Which party would you vote for if there would be elections next Sunday?") +
-  xlab("") +
-  ylab("Share (%)") +
-  scale_fill_manual(values = c("black", "red", "mediumvioletred", "blue", "green3", "grey", "white"))
-
-voting_pl_prot_diff <- ggplot(data=data_voting_prot) +
-  geom_bar(aes(x=voting, y=diff_prot, fill=as.factor(voting)), stat = "identity") +
-  scale_x_discrete(guide = guide_axis(angle = 45)) +
-  labs(fill = "Party", title="Difference between protesters and remainder (%pts)") +
-  xlab("") +
-  ylab("Share (%)") +
-  scale_fill_manual(values = c("black", "red", "mediumvioletred", "blue", "green3", "grey", "white"))
-
-#### Analyse time ####
-
-rids_complete <- unique(data$RID)
-
-time_stamps_raw <- time_stamps
-
-# Step 1: Calculate time spent on each page
-time_stamps <- time_stamps %>%
-  filter(RID %in% rids_complete) %>%
-  mutate(across(starts_with("PAGE_SUBMIT"), ~ . - get(sub("SUBMIT", "DISPLAY", cur_column())), .names = "time_spent_{col}"))
-
-
-# Step 2: Reshape to long format
-time_long <- time_stamps %>%
-  pivot_longer(cols = starts_with("time_spent_"),
-               names_to = "Page",
-               values_to = "Time_Spent") %>%
-  mutate(Page = as.numeric(gsub("time_spent_PAGE_SUBMIT_", "", Page)))
-
-
-# Step 3: Calculate the average time per page
-average_time_per_page <- time_long %>%
-  group_by(Page) %>%
-  summarize(Average_Time_Spent = mean(Time_Spent, na.rm = TRUE),
-            Median_Time_Spent = median(Time_Spent, na.rm = TRUE)) %>%
-  mutate(Color_Group = case_when(Page >= 31 & Page <= 40 ~ "DCE",
-                                 Page >= 43 & Page <= 51 ~ "NR, CV, TC",
-                                 Page >= 54 & Page <= 62 ~ "UHH", TRUE~"Other"))
 
 
 
-# Step 4: Plot with highlighted pages
-page_times_mean <- ggplot(average_time_per_page, aes(x = Page, y = Average_Time_Spent, fill = Color_Group)) +
-  geom_bar(stat = "identity") +
-  scale_fill_manual(values = c("DCE" = "red", "NR, CV, TC"="forestgreen", "UHH" = "steelblue", "Other" = "grey")) +
-  labs(title = "Average Time Spent on Each Page by Respondents",
-       x = "Page Number",
-       y = "Average Time Spent (seconds)",
-       fill = "Page Type") +
-  theme_minimal()
-
-page_times_median <- ggplot(average_time_per_page, aes(x = Page, y = Median_Time_Spent, fill = Color_Group)) +
-  geom_bar(stat = "identity") +
-  scale_fill_manual(values = c("DCE" = "red", "NR, CV, TC"="forestgreen", "UHH" = "steelblue", "Other" = "grey")) +
-  labs(title = "Median Time Spent on Each Page by Respondents",
-       x = "Page Number",
-       y = "Median Time Spent (seconds)",
-       fill = "Page Type") +
-  theme_minimal()
-
-#
-
-
-cv_hhinc <- ggplot(data = data %>%
-                     mutate(income_group = cut(hhnetinc_numeric/hhsize,
-                                               breaks = c(0, 500, 1000, 1500, 2000, 2500, Inf),
-                                               labels = c('less than 500 Euro','500 - 999 Euro','1000 - 1499 Euro','1500 - 1999 Euro','2000 - 2499 Euro','more than 2500 Euro'),include.lowest = TRUE))) +
-  geom_boxplot(aes(x = income_group,
-                   y = cv, 
-                   group = income_group,
-                   fill = income_group),
-               outlier.shape = NA) +
-  ylab("Payment per year in €") +
-  xlab("Household Net Income Bracket") +
-  scale_fill_manual(values = c("darkgreen", "green", "yellow", "orange", "red", "gray"), 
-                    labels = c(
-                      'less than 500 Euro',
-                      '500 - 999 Euro',
-                      '1000 - 1499 Euro',
-                      '1500 - 1999 Euro',
-                      '2000 - 2499 Euro',
-                      'more than 2500 Euro'),
-                    name = "Income Bracket") +
-  coord_cartesian(ylim = c(0, 200)) +  # Zoom into the y-axis range
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.grid.major.y = element_line(color = "gray90")
-  )
 
 
 
-payment_distribution_hhinc <- ggplot(data) +
-  geom_histogram(aes(x = cut(hhnetinc_numeric/hhsize,
-                             breaks = c(0, 500, 1000, 1500, 2000, 2500, Inf),
-                             labels = c('less than 500 Euro','500 - 999 Euro','1000 - 1499 Euro','1500 - 1999 Euro','2000 - 2499 Euro','more than 2500 Euro'),include.lowest = TRUE),
-                     fill = as.factor(payment_distribution)), 
-                 stat = "count", position = "dodge") +
-  xlab("Household Net Income Bracket") +
-  scale_x_discrete(guide = guide_axis(angle = 45)) +
-  labs(title = "How did you envisage the distribution of the increased taxes among households when you voted on the proposed policy measures?",
-       fill = "Payment Distribution") +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  )
 
-payment_vision_hhinc <- ggplot(data) +
-  geom_histogram(aes(x = cut(hhnetinc_numeric/hhsize,
-                             breaks = c(0, 500, 1000, 1500, 2000, 2500, Inf),
-                             labels = c('less than 500 Euro','500 - 999 Euro','1000 - 1499 Euro','1500 - 1999 Euro','2000 - 2499 Euro','more than 2500 Euro'),include.lowest = TRUE),
-                     fill = as.factor(payment_vision)), 
-                 stat = "count", position = "dodge") +
-  xlab("Household Net Income Bracket") +
-  scale_x_discrete(guide = guide_axis(angle = 45)) +
-  labs(title = "How do you prefer the levy increases to be distributed?",
-       fill = "Payment Vision") +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  )
+
+
+
+
+
+
+
+
+
+
+
+
 
 ##### Create & Check Database ####
 
@@ -751,12 +415,7 @@ database <- fullchoice %>%
                               a2_x5 == 9 ~ 200, a2_x5 == 10 ~ 250))
 
 
-table((database$hnv_att - database$sq_hnv_area), database$dce_version)
-table((database$cost_att), database$dce_version)
-table(database$Dummy_hnv_visible, database$dce_version)
-table(database$Dummy_pa_full, database$dce_version)
-table(database$Dummy_pa_half, database$dce_version)
-table((database$pref1), database$dce_version)
+
 
 
 #### Calculate share of people who zoom on each cc card 
