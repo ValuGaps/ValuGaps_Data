@@ -1,65 +1,51 @@
+
+
+rm(list=ls())
+
 library(tidyverse)
+library(readxl)
+library(ggpubr)
 library(purrr)
-# Function to determine the most preferred type
-choose_best_type <- function(types) {
-  if ("double" %in% types) {
-    return("as.numeric")  # Prioritize numeric
-  } else if ("integer" %in% types) {
-    return("as.numeric")  # Convert integer to numeric for consistency
-  } else {
-    return("as.character")  # If no numeric types, default to character
-  }
+
+# source("Scripts/get_data.R")
+
+# Get rid of annoying dates
+# filerename <-function(x){
+# 
+#  file.rename(x, gsub("__", "_", x))
+#   return(x)
+# }
+# 
+# purrr::map(list.files("data/", full.names = TRUE, recursive = T), filerename)
+
+###### Readin all covariate files  ##### 
+
+
+
+read_cov <- function(x){
+
+  dcefiles <- map(list.files(dirname(x), full.names = TRUE, pattern = "DCE"),read_excel)
+  dcedata <- bind_rows(dcefiles) 
+  
+ raw_data<- read_excel(x) %>% 
+    mutate(RID = as.numeric(RID),
+           samplename = gsub("_covariates.xlsx","",basename(x)),
+           across(where(is.character), ~ type.convert(.x, as.is = TRUE))
+           )%>%
+             left_join(read_excel(gsub("covariates", "timestamps",x)), by = "RID") %>%
+   left_join(dcedata, by = "RID")
+    
+  
+
+ 
+return(raw_data)
+    
 }
 
 # Read all files into a list of data frames
-df_list <- list.files("data", full.names = TRUE, recursive = TRUE, pattern = "covariates") %>%
+raw_data <- list.files("data", full.names = TRUE, recursive = TRUE, pattern = "covariates") %>%
+  purrr::set_names(gsub("_covariates.xlsx","",basename(.))) %>% 
   map(read_cov)
-
-# Ensure all datasets contain the 'samplename' column
-df_list <- map(df_list, ~ .x %>% mutate(samplename = as.character(samplename)))
-
-# Extract column types for each dataset
-all_col_types_df <- map_dfr(df_list, function(df) {
-  tibble(
-    samplename = unique(df$samplename),
-    column = colnames(df),
-    type = sapply(df, class)
-  )
-})
-
-# Reshape to wide format for easier comparison
-all_col_types_wide <- all_col_types_df %>%
-  pivot_wider(names_from = samplename, values_from = type)
-
-# Determine the best type for each column
-best_types <- all_col_types_df %>%
-  group_by(column) %>%
-  summarise(best_type = choose_best_type(unique(type)), .groups = "drop") %>%
-  deframe()
-
-# Function to enforce correct types in each dataframe
-standardize_types <- function(df, best_types) {
-  # Add missing columns with the correct NA type
-  for (col in names(best_types)) {
-    if (!col %in% colnames(df)) {
-      df[[col]] <- if (best_types[[col]] == "as.numeric") NA_real_ else NA_character_
-    }
-  }
-  
-  # Apply type conversion only to existing columns
-  df <- df %>%
-    mutate(across(all_of(intersect(names(df), names(best_types))), 
-                  ~ match.fun(best_types[[cur_column()]])(.x)))  # Removed .names to keep original names
-  
-  return(df)  # Ensure the modified df is returned
-}
-
-# Apply standardization to all data frames
-df_list <- map(df_list, ~ standardize_types(.x, best_types))
-
-# Bind rows with corrected types
-covariates <- bind_rows(df_list) %>%
-  select(RID, samplename, everything())
 
 # Get unique samplenames
 samplenames <- unique(covariates$samplename)
