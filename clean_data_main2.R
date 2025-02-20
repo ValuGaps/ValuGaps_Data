@@ -24,13 +24,123 @@ library(purrr)
 
 read_cov <- function(x){
 
-  dcefiles <- map(list.files(dirname(x), full.names = TRUE, pattern = "DCE"),read_excel)
-  dcedata <- bind_rows(dcefiles) 
+
+ dcepath <- list.files(dirname(x), full.names = TRUE, pattern = "DCE")
+  
+  dcefiles <-  dcepath %>%   purrr::set_names(gsub("\\.xlsx","",basename(.))) %>% 
+    map(read_excel)
+  
+  
+  dcedata <- bind_rows(dcefiles, .id = "dce_version") %>% 
+   mutate(pref1 = ifelse(grepl("swap", dce_version), 3 - pref1, pref1))
+  
   
  raw_data<- read_excel(x) %>% 
+   rename(lat = latlng_wood_SQ_1_1, lon = latlng_wood_SQ_1_2,
+          lat_tc = latlng_wood_SQ2_1_1, lon_tc = latlng_wood_SQ2_1_2) %>% 
     mutate(RID = as.numeric(RID),
-           samplename = gsub("_covariates.xlsx","",basename(x)),
-           across(where(is.character), ~ type.convert(.x, as.is = TRUE))
+           survey_round = gsub("_covariates.xlsx","",basename(x)),
+           across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
+           STATUS_recoded = case_when(
+             STATUS == 1 ~ "New respondent",
+             STATUS == 2 ~ "Invalid entry",
+             STATUS == 3 ~ "Pending",
+             STATUS == 4 ~ "Over quota on Segment Assignment",
+             STATUS == 5 ~ "Rejected",
+             STATUS == 6 ~ "Started",
+             STATUS == 7 ~ "Complete",
+             STATUS == 8 ~ "Screened out",
+             STATUS == 9 ~ "User initiated timeout",
+             STATUS == 10 ~ "System initiated timeout",
+             STATUS == 11 ~ "Bad parameters",
+             STATUS == 12 ~ "Survey closed",
+             STATUS == 13 ~ "System error",
+             STATUS == 14 ~ "Reentrant",
+             STATUS == 15 ~ "Active",
+             STATUS == 16 ~ "Over Quota at Start",
+             STATUS == 17 ~ "Manually Screened Out",
+             TRUE ~ NA_character_  # Assign NA if the STATUS doesn't match any of the conditions
+           ),
+           gender_chr = case_when( gender == 1 ~ "male",
+                                   gender == 2 ~ "female",
+                                   gender == 3 ~ "diverse",
+                                   gender == 4 ~ "na",),
+           sq_hnv_share = as.numeric(gsub("%", "", sq_hnv_share)),
+           sq_pa_share = as.numeric(gsub("%", "", sq_pa_share)),
+           cv = as.numeric(cv),
+           birthyear = as.numeric(birthyralt_other),
+           lon = as.numeric(lon),
+           lat = as.numeric(lat),
+           sq_hnv_share = as.numeric(gsub("%", "", sq_hnv_share)),
+           sq_pa_share = as.numeric(gsub("%", "", sq_pa_share)),
+           cv = as.numeric(cv),
+           birthyear = as.numeric(birthyralt_other),
+           lifesat_recode = coalesce(lifesat, lifesat_mobile)-1,
+           healthphys_recode = coalesce(healthphys, healthphys_mobile)-1,
+           healthpsych_recode = coalesce(healthpsych, healthpsych_mobile)-1,
+           hhnetinc_recode = factor(hhnetinc, levels = c('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'),
+                                    labels = c('weniger als 500 Euro', '500 - 999 Euro', '1000 - 1499 Euro',
+                                               '1500 - 1999 Euro', '2000 - 2499 Euro', '2500 - 2999 Euro',
+                                               '3000 - 3499 Euro', '3500 - 3999 Euro', '4000 - 4999 Euro',
+                                               'mehr als 5000 Euro', 'k.A.')),
+           voting = factor(pol_btw, levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9"),
+                           labels = c("CDU/CSU", "SPD", "BSW", "AfD", "Die Linke", "Die Grünen", "FDP", "Keine Angabe", "Sonstige")),
+           protest_1_recode = factor(protest_1, levels = c("1", "2", "3", "4", "5", "6"),
+                                     labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
+           protest_2_recode = factor(protest_2, levels = c("1", "2", "3", "4", "5", "6"),
+                                     labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
+           protest_3_recode = factor(protest_3, levels = c("1", "2", "3", "4", "5", "6"),
+                                     labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
+           protest_4_recode = factor(protest_4, levels = c("1", "2", "3", "4", "5", "6"),
+                                     labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
+           protest_5_recode = factor(protest_5, levels = c("1", "2", "3", "4", "5", "6"),
+                                     labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
+           urban_rural = case_when(q2_1 < 3 ~ "Village", q2_1 < 5 ~ "Small City", q2_1 < 7 ~ "Large City", TRUE~NA_character_),
+           hours_spend = as.numeric(hours_spend),
+           minutes_spend = as.numeric(minutes_spend),
+           hours_spend = replace_na(hours_spend, 0),
+           minutes_spend = replace_na(minutes_spend, 0),
+           time_spend_tc = hours_spend * 60  + minutes_spend,
+           zoom_first_cc = case_when(getZoom1 > 0 ~ 1, TRUE~0), 
+           payment_distribution = case_when(q27_2 == 1 ~ "Progressive", q27_2 == 2 ~ "Nobody pays", q27_2 == 3 ~ "Equal", q27_2 == 4 ~"Not thought about it"),
+           payment_vision = case_when(q1171 == 1 ~ "Every household the same", q1171 == 2 ~ "Relative to their income tax", q1171 == 3 ~ "Do not care about distribution", q1171 == 4 ~"Other"),
+           
+           hhnetinc_numeric = case_when(
+             hhnetinc == '1' ~ 250,
+             hhnetinc == '2' ~ 750,
+             hhnetinc == '3' ~ 1250,
+             hhnetinc == '4' ~ 1750,
+             hhnetinc == '5' ~ 2250,
+             hhnetinc == '6' ~ 2750,
+             hhnetinc == '7' ~ 3250,
+             hhnetinc == '8' ~ 3750,
+             hhnetinc == '9' ~ 4500,
+             hhnetinc == '10' ~ 5500,
+             TRUE ~ NA_real_  # Exclude 'k.A.'
+           ),
+           corr_all = if_else(
+             q10 == 3 & q14 == 3 &
+               is.na(hnv1_miss) & is.na(hnv2_miss) &
+               is.na(hnv3_miss) & is.na(hnv4_miss) &
+               is.na(hnv5_miss) & is.na(hnv6_miss),
+             1, 
+             0
+           ),
+           dogowner = case_when(
+             dog %in% c(1, 2) ~ 1,  # Assign 1 if dog is 1 or 2
+             dog == 3 ~ 2,          # Assign 2 if dog is 3
+             TRUE ~ NA_real_        # Assign NA for all other cases
+           ),
+           educ = factor(educ, levels = 1:8, labels = c(
+             "Derzeit Schüler*in in einer allgemeinbildenden Schule",
+             "Von der Schule abgegangen ohne Schulabschluss",
+             "Hauptschulabschluss",
+             "Mittlere Reife (Realschulabschluss)",
+             "Abitur",
+             "Hochschulabschluss (Universität, FH)",
+             "Will ich nicht beantworten",
+             "Sonstiges"
+           ))
            )%>%
              left_join(read_excel(gsub("covariates", "timestamps",x)), by = "RID") %>%
    left_join(dcedata, by = "RID")
@@ -47,62 +157,17 @@ raw_data <- list.files("data", full.names = TRUE, recursive = TRUE, pattern = "c
   purrr::set_names(gsub("_covariates.xlsx","",basename(.))) %>% 
   map(read_cov)
 
-# Get unique samplenames
-samplenames <- unique(covariates$samplename)
-
-# Assign numeric prefixes
-samplename_map <- setNames(seq_along(samplenames), samplenames)
-
-# Apply transformation to create unique numeric IDs
-covariates <- covariates %>% 
-                 mutate(
-                   unique_RID = (paste0(samplename,"_",  RID))
-                 ) %>%
-                 select(unique_RID, everything()) # Move unique_RID to the front
-
-
-addID <- 222 # id marker for new survey round to get unique ids
 
 
 
-raw_data <- read_excel(data_path) %>%
-  mutate(RID = as.numeric(paste0(RID, addID)),  
-         birthyralt_other = as.numeric(birthyralt_other),
-         natvisit_next12m = as.character(natvisit_next12m),
-         survey_round = "main2") 
-
-
-time_stamps <- read_excel("data/Main_2/VALUGAPS_Main_2__Timestamps.xlsx") %>% 
-  mutate(survey_round ="main2",  RID = paste0(RID, addID), RID = as.numeric(RID))
-
-choice_exp_1 <- read_xlsx("data/Main_2/VALUGAPS_Main_2_DCE_Exp.xlsx") 
-choice_exp_swap_1 <- read_xlsx("data/Main_2/VALUGAPS_Main_2__DCE_Exp_Swap.xlsx")
-choice_exp_2 <- read_xlsx("data/Main_2/VALUGAPS_Main_2__DCE_Exp_2.xlsx")
-choice_exp_swap_2 <- read_xlsx("data/Main_2/VALUGAPS_Main_2__DCE_Exp_Swap_2.xlsx")
-
-choicedata_low <- read_xlsx("data/Main_2/VALUGAPS_Main_2__DCE_Exp_Swap.xlsx") %>% 
-  mutate(pref1= case_when(
-    pref1 == 1 ~ 2,
-    pref1 == 2 ~ 1,
-    TRUE ~ NA)
-  ) %>% 
-  bind_rows(read_xlsx("data/Main_2/VALUGAPS_Main_2_DCE_Exp.xlsx"))
-
-
-choicedata_high <- read_xlsx("data/Main_2/VALUGAPS_Main_2__DCE_Exp_Swap_2.xlsx") %>% 
-  mutate(pref1= case_when(
-    pref1 == 1 ~ 2,
-    pref1 == 2 ~ 1,
-    TRUE ~ NA)
-  ) %>% 
-  bind_rows(read_xlsx("data/Main_2/VALUGAPS_Main_2__DCE_Exp_2.xlsx"))
-
-
-##### Combine data #####
 
 
 
-choicedata <- bind_rows(choicedata_low, choicedata_high) %>% mutate(RID = paste0(RID, addID), RID = as.numeric(RID))
+
+
+
+
+
 
 
 raw_data <- raw_data %>%
@@ -131,11 +196,11 @@ raw_data <- raw_data %>%
                              gender == 2 ~ "female",
                              gender == 3 ~ "diverse",
                              gender == 4 ~ "na",)) %>% 
-  rename(lat = latlng_wood_SQ_1_1, lon = latlng_wood_SQ_1_2) %>% 
+  rename(lat = latlng_wood_SQ_1_1, lon = latlng_wood_SQ_1_2,
+         lat_tc = latlng_wood_SQ2_1_1, lon_tc = latlng_wood_SQ2_1_2) %>% 
   mutate(         lon = as.numeric(lon),
-                  lat = as.numeric(lat)) %>% 
-  rename(lat_tc = latlng_wood_SQ2_1_1, lon_tc = latlng_wood_SQ2_1_2) %>% 
-  mutate(sq_hnv_share = as.numeric(gsub("%", "", sq_hnv_share)),
+                  lat = as.numeric(lat),
+  sq_hnv_share = as.numeric(gsub("%", "", sq_hnv_share)),
          sq_pa_share = as.numeric(gsub("%", "", sq_pa_share)),
          cv = as.numeric(cv),
          birthyear = as.numeric(birthyralt_other))
