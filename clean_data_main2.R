@@ -6,6 +6,7 @@ library(tidyverse)
 library(readxl)
 library(ggpubr)
 library(purrr)
+library(tidyr)
 
 # source("Scripts/get_data.R")
 
@@ -85,9 +86,7 @@ read_cov <- function(x) {
     mutate(
       RID = as.numeric(RID),
       survey_round = gsub("_covariates.xlsx", "", basename(x)),
-      
-      # Convert character variables to appropriate types
-      across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
+
       
       # Recoding STATUS variable
       STATUS_recoded = case_when(
@@ -187,7 +186,11 @@ read_cov <- function(x) {
         a2_x5 == 1 ~ 5, a2_x5 == 2 ~ 10, a2_x5 == 3 ~ 20,
         a2_x5 == 4 ~ 40, a2_x5 == 5 ~ 60, a2_x5 == 6 ~ 80,
         a2_x5 == 7 ~ 120, a2_x5 == 8 ~ 150, a2_x5 == 9 ~ 200, a2_x5 == 10 ~ 250
-      )
+      ),
+      
+      # Convert character variables to appropriate types
+      across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
+      across(any_of(c("lat","lon","birthyralt_other","natvisit_company","forest_size", "natvisit_next12m")), as.numeric),
     )
   
   return(raw_data)
@@ -203,14 +206,20 @@ raw_data <- list.files("data", full.names = TRUE, recursive = TRUE, pattern = "c
 
 
 
+all_data <- bind_rows(raw_data, .id = "survey_round")
+
+survey_round_map <- all_data %>%
+  distinct(survey_round) %>%
+  mutate(prefix = row_number() * 10000) %>%  # Assign a unique 10,000s prefix
+  deframe()
+
+# Generate `RID_unique`
+all_data <-all_data %>%
+  mutate(RID_unique = survey_round_map[survey_round] + RID)
 
 
-
-
-
-
-
-
+database <- all_data %>% 
+  filter(STATUS_recoded == "Complete")
 
 
 
@@ -219,64 +228,6 @@ raw_data <- list.files("data", full.names = TRUE, recursive = TRUE, pattern = "c
 
 
 
-##Question 1
-labels <- c(
-  "1" = "less than 10%",
-  "2" = "around 25 %",
-  "3" = "appr. 50%",
-  "4" = "around 75 %",
-  "5" = "more than 90 %"
-)
-data$q10 <- factor(data$q10, levels = c(1, 2, 3, 4, 5))
-
-
-
-##Question 2
-#
-calculate_share <- function(data, miss_col, corr_col, label) {
-  data %>%
-    summarise(
-      count_miss = sum(!is.na(get(miss_col))),
-      count_corr = sum(!is.na(get(corr_col))),
-      total_count = count_miss + count_corr,
-      share_corr = count_corr / total_count * 100
-    ) %>%
-    mutate(
-      Issue = label
-    )
-}
-
-hnv1_share <- calculate_share(data, "hnv1_miss", "hnv1_corr", "Rich Small Water Bodies and Ditches")
-hnv2_share <- calculate_share(data, "hnv2_miss", "hnv2_corr", "Flower Strips")
-hnv3_share <- calculate_share(data, "hnv3_miss", "hnv3_corr", "Hedges")
-hnv4_share <- calculate_share(data, "hnv4_miss", "hnv4_corr", "Field Shrubs")
-hnv5_share <- calculate_share(data, "hnv5_miss", "hnv5_corr", "Straightened Rivers")
-hnv6_share <- calculate_share(data, "hnv6_miss", "hnv6_corr", "Wide Forest Roads")
-
-# Combine all shares into one data frame
-share_data <- bind_rows(hnv1_share, hnv2_share, hnv3_share, hnv4_share, hnv5_share, hnv6_share)
-
-
-
-
-
-##Question 3
-labels <- c(
-  "1" = "In scattered small areas",
-  "2" = "Grouped together",
-  "3" = "Both scattered and grouped"
-)
-data$q14 <- factor(data$q14, levels = c(1, 2, 3))
-
-
-
-
-
-
-educ_summary <- data %>%
-  count(educ) %>%
-  mutate(percentage = n / sum(n) * 100) %>%
-  arrange(desc(n))
 
 
 
@@ -292,68 +243,4 @@ educ_summary <- data %>%
 
 
 
-# Step 2: Calculate the share of people who zoomed for each getZoom column
-zoom_summary_mobile <- database %>%
-  group_by(is_mobile) %>%
-  summarise(across(starts_with("zoom_getZoom"), mean, na.rm = TRUE))
 
-# Step 3: Reshape the data to long format for plotting
-zoom_summary_long_mobile <- zoom_summary_mobile %>%
-  pivot_longer(cols = starts_with("zoom_getZoom"),
-               names_to = "Zoom_Variable",
-               values_to = "Zoom_Share") %>%
-  mutate(Zoom_Variable = factor(Zoom_Variable, 
-                                levels = paste0("zoom_getZoom", 1:10)),
-         is_mobile = ifelse(is_mobile == "true", "Mobile", "Non-Mobile"))  # Rename for plot
-
-# Step 4: Plot with lines and points, separating mobile and non-mobile
-zoom_cc_card <- ggplot(zoom_summary_long_mobile, aes(x = Zoom_Variable, y = Zoom_Share, group = is_mobile, color = is_mobile)) +
-  geom_line(size = 1) +   # Line connecting the points
-  geom_point(size = 3) +  # Points on the line
-  labs(x = "Zoom Variable", y = "Share of People Who Zoomed", color = "Device Type", 
-       title = "Share of People Who Zoomed per Choice Card") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-
-
-
-
-
-
-# Apply the function to create a new column for the device category in the dataframe
-data <- data %>%
-  mutate(device_category = sapply(respondent_ua, extract_device_category))
-
-
-
-raw_data <- raw_data %>% 
-  mutate(device_type = sapply(respondent_ua, extract_device_type)) %>% 
-  mutate(device_category = sapply(respondent_ua, extract_device_category))
-
-
-##### Merge with pretest data ####
-
-
-source("Scripts/add_pretest_data.R")
-
-source("Scripts/add_main1_data.R")
-
-
-fullchoice_all <- bind_rows(fullchoice, fullchoice_main1, fullchoice_pre) 
-
-fullchoice_raw_pre$RID <- as.numeric(fullchoice_raw_pre$RID)
-
-raw_data_pre$RID <- as.numeric(raw_data_pre$RID)
-
-fullchoice_all_raw <- bind_rows(fullchoice_raw, fullchoice_raw_main1, fullchoice_raw_pre)
-
-raw_data_all <- bind_rows(raw_data, raw_data_main1, raw_data_pre)
-
-time_stamps_all <- bind_rows(time_stamps_raw, time_stamps_main1, time_stamps_pre)
-
-data_pre <- data_pre %>% mutate(q10 = as.factor(q10),
-                                q14 = as.factor(q14))  
-
-
-data_all <- bind_rows(data, data_main1, data_pre)
