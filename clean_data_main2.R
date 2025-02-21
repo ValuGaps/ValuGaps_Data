@@ -103,7 +103,7 @@ read_cov <- function(x){
            time_spend_tc = hours_spend * 60  + minutes_spend,
            zoom_first_cc = case_when(getZoom1 > 0 ~ 1, TRUE~0), 
            payment_distribution = case_when(q27_2 == 1 ~ "Progressive", q27_2 == 2 ~ "Nobody pays", q27_2 == 3 ~ "Equal", q27_2 == 4 ~"Not thought about it"),
-           payment_vision = case_when(q1171 == 1 ~ "Every household the same", q1171 == 2 ~ "Relative to their income tax", q1171 == 3 ~ "Do not care about distribution", q1171 == 4 ~"Other"),
+           payment_vision = if ("q1171" %in% names(.)) case_when(q1171 == 1 ~ "Every household the same", q1171 == 2 ~ "Relative to their income tax", q1171 == 3 ~ "Do not care about distribution", q1171 == 4 ~"Other"),
            
            hhnetinc_numeric = case_when(
              hhnetinc == '1' ~ 250,
@@ -140,10 +140,25 @@ read_cov <- function(x){
              "Hochschulabschluss (Universität, FH)",
              "Will ich nicht beantworten",
              "Sonstiges"
-           ))
+           )),
+           across(c(getZoom1, getZoom2, getZoom3, getZoom4, getZoom5, getZoom6, getZoom7, getZoom8, getZoom9, getZoom10),
+                  ~ ifelse(is.na(.), 0, ifelse(. > 0, 1, 0)), 
+                  .names = "zoom_{col}")
            )%>%
              left_join(read_excel(gsub("covariates", "timestamps",x)), by = "RID") %>%
-   left_join(dcedata, by = "RID")
+   left_join(dcedata, by = "RID") %>% 
+   group_by(RID) %>%
+   mutate(
+     total_pref1 = sum(pref1, na.rm = TRUE),
+     protester = case_when(
+       total_pref1 == 20 ~ 0,  # Absolute supporter
+       total_pref1 > 13 ~ 1,   # No protester/No absolute supporter
+       total_pref1 > 10 & total_pref1 <= 13 ~ 2,  # Moderate Protester
+       total_pref1 == 10 ~ 3,  # Absolute protester
+       TRUE ~ NA_real_  # Handle cases where total_pref1 is NA or below threshold
+     )
+   ) %>%
+   ungroup()
     
   
 
@@ -170,166 +185,10 @@ raw_data <- list.files("data", full.names = TRUE, recursive = TRUE, pattern = "c
 
 
 
-raw_data <- raw_data %>%
-  mutate(
-  STATUS_recoded = case_when(
-  STATUS == 1 ~ "New respondent",
-  STATUS == 2 ~ "Invalid entry",
-  STATUS == 3 ~ "Pending",
-  STATUS == 4 ~ "Over quota on Segment Assignment",
-  STATUS == 5 ~ "Rejected",
-  STATUS == 6 ~ "Started",
-  STATUS == 7 ~ "Complete",
-  STATUS == 8 ~ "Screened out",
-  STATUS == 9 ~ "User initiated timeout",
-  STATUS == 10 ~ "System initiated timeout",
-  STATUS == 11 ~ "Bad parameters",
-  STATUS == 12 ~ "Survey closed",
-  STATUS == 13 ~ "System error",
-  STATUS == 14 ~ "Reentrant",
-  STATUS == 15 ~ "Active",
-  STATUS == 16 ~ "Over Quota at Start",
-  STATUS == 17 ~ "Manually Screened Out",
-  TRUE ~ NA_character_  # Assign NA if the STATUS doesn't match any of the conditions
-  ),
-     gender_chr = case_when( gender == 1 ~ "male",
-                             gender == 2 ~ "female",
-                             gender == 3 ~ "diverse",
-                             gender == 4 ~ "na",)) %>% 
-  rename(lat = latlng_wood_SQ_1_1, lon = latlng_wood_SQ_1_2,
-         lat_tc = latlng_wood_SQ2_1_1, lon_tc = latlng_wood_SQ2_1_2) %>% 
-  mutate(         lon = as.numeric(lon),
-                  lat = as.numeric(lat),
-  sq_hnv_share = as.numeric(gsub("%", "", sq_hnv_share)),
-         sq_pa_share = as.numeric(gsub("%", "", sq_pa_share)),
-         cv = as.numeric(cv),
-         birthyear = as.numeric(birthyralt_other))
 
-
-
-
-
-
-data <- raw_data %>% 
-  filter(STATUS == 7) %>%
-  mutate(lifesat_recode = coalesce(lifesat, lifesat_mobile)-1,
-         healthphys_recode = coalesce(healthphys, healthphys_mobile)-1,
-         healthpsych_recode = coalesce(healthpsych, healthpsych_mobile)-1,
-         hhnetinc_recode = factor(hhnetinc, levels = c('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'),
-                                   labels = c('weniger als 500 Euro', '500 - 999 Euro', '1000 - 1499 Euro',
-                                              '1500 - 1999 Euro', '2000 - 2499 Euro', '2500 - 2999 Euro',
-                                              '3000 - 3499 Euro', '3500 - 3999 Euro', '4000 - 4999 Euro',
-                                              'mehr als 5000 Euro', 'k.A.')),
-         voting = factor(pol_btw, levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9"),
-                         labels = c("CDU/CSU", "SPD", "BSW", "AfD", "Die Linke", "Die Grünen", "FDP", "Keine Angabe", "Sonstige")),
-         protest_1_recode = factor(protest_1, levels = c("1", "2", "3", "4", "5", "6"),
-                         labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
-         protest_2_recode = factor(protest_2, levels = c("1", "2", "3", "4", "5", "6"),
-                         labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
-         protest_3_recode = factor(protest_3, levels = c("1", "2", "3", "4", "5", "6"),
-                                   labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
-         protest_4_recode = factor(protest_4, levels = c("1", "2", "3", "4", "5", "6"),
-                                   labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
-         protest_5_recode = factor(protest_5, levels = c("1", "2", "3", "4", "5", "6"),
-                                   labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
-         urban_rural = case_when(q2_1 < 3 ~ "Village", q2_1 < 5 ~ "Small City", q2_1 < 7 ~ "Large City", TRUE~NA_character_),
-         hours_spend = as.numeric(hours_spend),
-         minutes_spend = as.numeric(minutes_spend),
-         hours_spend = replace_na(hours_spend, 0),
-         minutes_spend = replace_na(minutes_spend, 0),
-         time_spend_tc = hours_spend * 60  + minutes_spend,
-         zoom_first_cc = case_when(getZoom1 > 0 ~ 1, TRUE~0), 
-         payment_distribution = case_when(q27_2 == 1 ~ "Progressive", q27_2 == 2 ~ "Nobody pays", q27_2 == 3 ~ "Equal", q27_2 == 4 ~"Not thought about it"),
-         payment_vision = case_when(q1171 == 1 ~ "Every household the same", q1171 == 2 ~ "Relative to their income tax", q1171 == 3 ~ "Do not care about distribution", q1171 == 4 ~"Other"),
-
-         hhnetinc_numeric = case_when(
-           hhnetinc == '1' ~ 250,
-           hhnetinc == '2' ~ 750,
-           hhnetinc == '3' ~ 1250,
-           hhnetinc == '4' ~ 1750,
-           hhnetinc == '5' ~ 2250,
-           hhnetinc == '6' ~ 2750,
-           hhnetinc == '7' ~ 3250,
-           hhnetinc == '8' ~ 3750,
-           hhnetinc == '9' ~ 4500,
-           hhnetinc == '10' ~ 5500,
-           TRUE ~ NA_real_  # Exclude 'k.A.'
-         ),
-         corr_all = if_else(
-           q10 == 3 & q14 == 3 &
-             is.na(hnv1_miss) & is.na(hnv2_miss) &
-             is.na(hnv3_miss) & is.na(hnv4_miss) &
-             is.na(hnv5_miss) & is.na(hnv6_miss),
-           1, 
-           0
-         ),
-         dogowner = case_when(
-           dog %in% c(1, 2) ~ 1,  # Assign 1 if dog is 1 or 2
-           dog == 3 ~ 2,          # Assign 2 if dog is 3
-           TRUE ~ NA_real_        # Assign NA for all other cases
-         ),
-         educ = factor(educ, levels = 1:8, labels = c(
-           "Derzeit Schüler*in in einer allgemeinbildenden Schule",
-           "Von der Schule abgegangen ohne Schulabschluss",
-           "Hauptschulabschluss",
-           "Mittlere Reife (Realschulabschluss)",
-           "Abitur",
-           "Hochschulabschluss (Universität, FH)",
-           "Will ich nicht beantworten",
-           "Sonstiges"
-         )),
-         
-  )
-
-# Merge choice data
-
-fullchoice <- choicedata %>% 
-  left_join(data,by = "RID") %>% 
-  filter(STATUS == 7)
-
-fullchoice_raw <- choicedata %>% 
-  left_join(raw_data,by = "RID")
 
 
          
-
-
-
-voting_order <- c("CDU/CSU", "SPD", "BSW", "AfD", "Die Linke", "Die Grünen", "FDP", "Sonstige")
-
-poll_data_0701 <- data.frame(
-  voting = voting_order,
-  poll = c(31.3, 16.2, 5.1, 19.1, 3.0, 13.5, 3.6, 8.2)
-)
-
-data_voting_diff <- data %>%
-  filter(voting != "Keine Angabe") %>%
-  group_by(voting) %>%
-  summarise(count = n()) %>%
-  mutate(share = round(count / sum(count) * 100, 1)) %>%
-  left_join(poll_data_0701, by = "voting") %>%
-  mutate(diff = share - poll)
-
-data_voting_diff$voting <- factor(data_voting_diff$voting, levels = voting_order)
-
-voting_pl_diff <- ggplot(data=data_voting_diff) +
-  geom_bar(aes(x=voting, y=diff, fill=as.factor(voting)), stat = "identity") +
-  scale_x_discrete(guide = guide_axis(angle = 45)) +
-  labs(fill = "Party", title="Difference between sample and national poll data (%pts)") +
-  xlab("") +
-  ylab("Share (%)") +
-  scale_fill_manual(values = c("black", "red", "mediumvioletred", "blue", "deeppink", "green3", "yellow", "grey"))
-
-
-
-
-
-
-
-
-
-
-
 
 
 
