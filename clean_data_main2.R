@@ -22,150 +22,177 @@ library(purrr)
 
 
 
-read_cov <- function(x){
-
-
- dcepath <- list.files(dirname(x), full.names = TRUE, pattern = "DCE")
+read_cov <- function(x) {
   
-  dcefiles <-  dcepath %>%   purrr::set_names(gsub("\\.xlsx","",basename(.))) %>% 
-    map(read_excel)
+  # Function to categorize device based on user agent string
+  extract_device_category <- function(ua_string) {
+    if (grepl("Windows", ua_string, ignore.case = TRUE)) {
+      return("Laptop/Desktop")
+    } else if (grepl("Macintosh|Mac OS X", ua_string, ignore.case = TRUE)) {
+      return("Laptop/Desktop")
+    } else if (grepl("CrOS", ua_string, ignore.case = TRUE)) {
+      return("Laptop/Desktop")  # Chrome OS devices are typically laptops
+    } else if (grepl("Android", ua_string, ignore.case = TRUE)) {
+      if (grepl("Mobile", ua_string, ignore.case = TRUE)) {
+        return("Mobile Phone")
+      } else {
+        return("Tablet")
+      }
+    } else if (grepl("iPhone", ua_string, ignore.case = TRUE)) {
+      return("Mobile Phone")
+    } else if (grepl("iPad", ua_string, ignore.case = TRUE)) {
+      return("Tablet")
+    } else {
+      return("Other/Unknown")  # Default category for unidentified devices
+    }
+  }
   
+  # Function to extract specific device type
+  extract_device_type <- function(ua_string) {
+    if (grepl("Windows", ua_string, ignore.case = TRUE)) {
+      return("Windows")
+    } else if (grepl("Macintosh|Mac OS X", ua_string, ignore.case = TRUE)) {
+      return("Mac")
+    } else if (grepl("Linux", ua_string, ignore.case = TRUE)) {
+      return("Linux")
+    } else if (grepl("Android", ua_string, ignore.case = TRUE)) {
+      return("Android")
+    } else if (grepl("iPhone", ua_string, ignore.case = TRUE)) {
+      return("iPhone")
+    } else if (grepl("iPad", ua_string, ignore.case = TRUE)) {
+      return("iPad")
+    } else if (grepl("CrOS", ua_string, ignore.case = TRUE)) {
+      return("Chrome OS")
+    } else {
+      return("Other")  # Default category for unidentified operating systems
+    }
+  }
   
-  dcedata <- bind_rows(dcefiles, .id = "dce_version") %>% 
-   mutate(pref1 = ifelse(grepl("swap", dce_version), 3 - pref1, pref1))
+  # Identify DCE files in the same directory and read them
+  dcepath <- list.files(dirname(x), full.names = TRUE, pattern = "DCE")
   
+  # Read and merge DCE data
+  dcedata <- dcepath %>%
+    purrr::set_names(gsub("\\.xlsx", "", basename(.))) %>%
+    map(read_excel) %>%
+    bind_rows(.id = "dce_source") %>%
+    mutate(pref1 = ifelse(grepl("swap", dce_source), 3 - pref1, pref1))  # Adjust pref1 based on dce_source
   
- raw_data<- read_excel(x) %>% 
-   rename(lat = latlng_wood_SQ_1_1, lon = latlng_wood_SQ_1_2,
-          lat_tc = latlng_wood_SQ2_1_1, lon_tc = latlng_wood_SQ2_1_2) %>% 
-    mutate(RID = as.numeric(RID),
-           survey_round = gsub("_covariates.xlsx","",basename(x)),
-           across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
-           STATUS_recoded = case_when(
-             STATUS == 1 ~ "New respondent",
-             STATUS == 2 ~ "Invalid entry",
-             STATUS == 3 ~ "Pending",
-             STATUS == 4 ~ "Over quota on Segment Assignment",
-             STATUS == 5 ~ "Rejected",
-             STATUS == 6 ~ "Started",
-             STATUS == 7 ~ "Complete",
-             STATUS == 8 ~ "Screened out",
-             STATUS == 9 ~ "User initiated timeout",
-             STATUS == 10 ~ "System initiated timeout",
-             STATUS == 11 ~ "Bad parameters",
-             STATUS == 12 ~ "Survey closed",
-             STATUS == 13 ~ "System error",
-             STATUS == 14 ~ "Reentrant",
-             STATUS == 15 ~ "Active",
-             STATUS == 16 ~ "Over Quota at Start",
-             STATUS == 17 ~ "Manually Screened Out",
-             TRUE ~ NA_character_  # Assign NA if the STATUS doesn't match any of the conditions
-           ),
-           gender_chr = case_when( gender == 1 ~ "male",
-                                   gender == 2 ~ "female",
-                                   gender == 3 ~ "diverse",
-                                   gender == 4 ~ "na",),
-           sq_hnv_share = as.numeric(gsub("%", "", sq_hnv_share)),
-           sq_pa_share = as.numeric(gsub("%", "", sq_pa_share)),
-           cv = as.numeric(cv),
-           birthyear = as.numeric(birthyralt_other),
-           lon = as.numeric(lon),
-           lat = as.numeric(lat),
-           sq_hnv_share = as.numeric(gsub("%", "", sq_hnv_share)),
-           sq_pa_share = as.numeric(gsub("%", "", sq_pa_share)),
-           cv = as.numeric(cv),
-           birthyear = as.numeric(birthyralt_other),
-           lifesat_recode = coalesce(lifesat, lifesat_mobile)-1,
-           healthphys_recode = coalesce(healthphys, healthphys_mobile)-1,
-           healthpsych_recode = coalesce(healthpsych, healthpsych_mobile)-1,
-           hhnetinc_recode = factor(hhnetinc, levels = c('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'),
-                                    labels = c('weniger als 500 Euro', '500 - 999 Euro', '1000 - 1499 Euro',
-                                               '1500 - 1999 Euro', '2000 - 2499 Euro', '2500 - 2999 Euro',
-                                               '3000 - 3499 Euro', '3500 - 3999 Euro', '4000 - 4999 Euro',
-                                               'mehr als 5000 Euro', 'k.A.')),
-           voting = factor(pol_btw, levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9"),
-                           labels = c("CDU/CSU", "SPD", "BSW", "AfD", "Die Linke", "Die Grünen", "FDP", "Keine Angabe", "Sonstige")),
-           protest_1_recode = factor(protest_1, levels = c("1", "2", "3", "4", "5", "6"),
-                                     labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
-           protest_2_recode = factor(protest_2, levels = c("1", "2", "3", "4", "5", "6"),
-                                     labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
-           protest_3_recode = factor(protest_3, levels = c("1", "2", "3", "4", "5", "6"),
-                                     labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
-           protest_4_recode = factor(protest_4, levels = c("1", "2", "3", "4", "5", "6"),
-                                     labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
-           protest_5_recode = factor(protest_5, levels = c("1", "2", "3", "4", "5", "6"),
-                                     labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
-           urban_rural = case_when(q2_1 < 3 ~ "Village", q2_1 < 5 ~ "Small City", q2_1 < 7 ~ "Large City", TRUE~NA_character_),
-           hours_spend = as.numeric(hours_spend),
-           minutes_spend = as.numeric(minutes_spend),
-           hours_spend = replace_na(hours_spend, 0),
-           minutes_spend = replace_na(minutes_spend, 0),
-           time_spend_tc = hours_spend * 60  + minutes_spend,
-           zoom_first_cc = case_when(getZoom1 > 0 ~ 1, TRUE~0), 
-           payment_distribution = case_when(q27_2 == 1 ~ "Progressive", q27_2 == 2 ~ "Nobody pays", q27_2 == 3 ~ "Equal", q27_2 == 4 ~"Not thought about it"),
-           payment_vision = if ("q1171" %in% names(.)) case_when(q1171 == 1 ~ "Every household the same", q1171 == 2 ~ "Relative to their income tax", q1171 == 3 ~ "Do not care about distribution", q1171 == 4 ~"Other"),
-           
-           hhnetinc_numeric = case_when(
-             hhnetinc == '1' ~ 250,
-             hhnetinc == '2' ~ 750,
-             hhnetinc == '3' ~ 1250,
-             hhnetinc == '4' ~ 1750,
-             hhnetinc == '5' ~ 2250,
-             hhnetinc == '6' ~ 2750,
-             hhnetinc == '7' ~ 3250,
-             hhnetinc == '8' ~ 3750,
-             hhnetinc == '9' ~ 4500,
-             hhnetinc == '10' ~ 5500,
-             TRUE ~ NA_real_  # Exclude 'k.A.'
-           ),
-           corr_all = if_else(
-             q10 == 3 & q14 == 3 &
-               is.na(hnv1_miss) & is.na(hnv2_miss) &
-               is.na(hnv3_miss) & is.na(hnv4_miss) &
-               is.na(hnv5_miss) & is.na(hnv6_miss),
-             1, 
-             0
-           ),
-           dogowner = case_when(
-             dog %in% c(1, 2) ~ 1,  # Assign 1 if dog is 1 or 2
-             dog == 3 ~ 2,          # Assign 2 if dog is 3
-             TRUE ~ NA_real_        # Assign NA for all other cases
-           ),
-           educ = factor(educ, levels = 1:8, labels = c(
-             "Derzeit Schüler*in in einer allgemeinbildenden Schule",
-             "Von der Schule abgegangen ohne Schulabschluss",
-             "Hauptschulabschluss",
-             "Mittlere Reife (Realschulabschluss)",
-             "Abitur",
-             "Hochschulabschluss (Universität, FH)",
-             "Will ich nicht beantworten",
-             "Sonstiges"
-           )),
-           across(c(getZoom1, getZoom2, getZoom3, getZoom4, getZoom5, getZoom6, getZoom7, getZoom8, getZoom9, getZoom10),
-                  ~ ifelse(is.na(.), 0, ifelse(. > 0, 1, 0)), 
-                  .names = "zoom_{col}")
-           )%>%
-             left_join(read_excel(gsub("covariates", "timestamps",x)), by = "RID") %>%
-   left_join(dcedata, by = "RID") %>% 
-   group_by(RID) %>%
-   mutate(
-     total_pref1 = sum(pref1, na.rm = TRUE),
-     protester = case_when(
-       total_pref1 == 20 ~ 0,  # Absolute supporter
-       total_pref1 > 13 ~ 1,   # No protester/No absolute supporter
-       total_pref1 > 10 & total_pref1 <= 13 ~ 2,  # Moderate Protester
-       total_pref1 == 10 ~ 3,  # Absolute protester
-       TRUE ~ NA_real_  # Handle cases where total_pref1 is NA or below threshold
-     )
-   ) %>%
-   ungroup()
+  # Read main dataset and process columns
+  raw_data <- read_excel(x) %>%
+    rename(lat = latlng_wood_SQ_1_1, lon = latlng_wood_SQ_1_2,
+           lat_tc = latlng_wood_SQ2_1_1, lon_tc = latlng_wood_SQ2_1_2) %>%
+    mutate(
+      RID = as.numeric(RID),
+      survey_round = gsub("_covariates.xlsx", "", basename(x)),
+      
+      # Convert character variables to appropriate types
+      across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
+      
+      # Recoding STATUS variable
+      STATUS_recoded = case_when(
+        STATUS == 1 ~ "New respondent",
+        STATUS == 2 ~ "Invalid entry",
+        STATUS == 3 ~ "Pending",
+        STATUS == 4 ~ "Over quota on Segment Assignment",
+        STATUS == 5 ~ "Rejected",
+        STATUS == 6 ~ "Started",
+        STATUS == 7 ~ "Complete",
+        STATUS == 8 ~ "Screened out",
+        STATUS == 9 ~ "User initiated timeout",
+        STATUS == 10 ~ "System initiated timeout",
+        STATUS == 11 ~ "Bad parameters",
+        STATUS == 12 ~ "Survey closed",
+        STATUS == 13 ~ "System error",
+        STATUS == 14 ~ "Reentrant",
+        STATUS == 15 ~ "Active",
+        STATUS == 16 ~ "Over Quota at Start",
+        STATUS == 17 ~ "Manually Screened Out",
+        TRUE ~ NA_character_
+      ),
+      
+      # Recoding gender
+      gender_chr = case_when(
+        gender == 1 ~ "male",
+        gender == 2 ~ "female",
+        gender == 3 ~ "diverse",
+        gender == 4 ~ "na"
+      ),
+      
+      # Convert percentage-based numeric variables
+      sq_hnv_share = as.numeric(gsub("%", "", sq_hnv_share)),
+      sq_pa_share = as.numeric(gsub("%", "", sq_pa_share)),
+      cv = as.numeric(cv),
+      birthyear = as.numeric(birthyralt_other),
+      
+      # Recode satisfaction, health, and income variables
+      lifesat_recode = coalesce(lifesat, lifesat_mobile) - 1,
+      healthphys_recode = coalesce(healthphys, healthphys_mobile) - 1,
+      healthpsych_recode = coalesce(healthpsych, healthpsych_mobile) - 1,
+      
+      # Recode urban vs rural category
+      urban_rural = case_when(
+        q2_1 < 3 ~ "Village",
+        q2_1 < 5 ~ "Small City",
+        q2_1 < 7 ~ "Large City",
+        TRUE ~ NA_character_
+      ),
+      
+      # Compute time spent in minutes
+      hours_spend = replace_na(as.numeric(hours_spend), 0),
+      minutes_spend = replace_na(as.numeric(minutes_spend), 0),
+      time_spend_tc = hours_spend * 60 + minutes_spend,
+      
+      # Device-related classifications
+      device_type = sapply(respondent_ua, extract_device_type),
+      device_category = sapply(respondent_ua, extract_device_category)
+    ) %>%
     
-  
-
- 
-return(raw_data)
+    # Merge timestamps and DCE data
+    left_join(read_excel(gsub("covariates", "timestamps", x)), by = "RID") %>%
+    left_join(dcedata, by = "RID") %>%
     
+    # Compute total preference scores and categorize protester types
+    group_by(RID) %>%
+    mutate(
+      total_pref1 = sum(pref1, na.rm = TRUE),
+      protester = case_when(
+        total_pref1 == 20 ~ 0,
+        total_pref1 > 13 ~ 1,
+        total_pref1 > 10 & total_pref1 <= 13 ~ 2,
+        total_pref1 == 10 ~ 3,
+        TRUE ~ NA_real_
+      )
+    ) %>%
+    ungroup() %>%
+    
+    # Create dummy variables for specific conditions
+    mutate(
+      Dummy_pa_half = case_when(a2_x2 == 2 ~ 1, TRUE ~ 0),
+      Dummy_pa_full = case_when(a2_x2 == 3 ~ 1, TRUE ~ 0),
+      Dummy_hnv_visible = case_when(a2_x4 == 2 ~ 1, TRUE ~ 0),
+      
+      # Compute hnv_att and pa_att based on experiment type and response
+      hnv_att = case_when(
+        grepl("exp$|swap$", dce_source) & a2_x3 == 1 ~ sq_hnv_area + 100,
+        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 1 ~ sq_hnv_area + 200
+      ),
+      pa_att = case_when(
+        grepl("exp$|swap$", dce_source) & a2_x1 == 1 ~ sq_pa_area + 100,
+        grepl("exp_2$|swap_2$", dce_source) & a2_x1 == 1 ~ sq_pa_area + 200
+      ),
+      
+      # Assign cost based on response levels
+      cost_att = case_when(
+        a2_x5 == 1 ~ 5, a2_x5 == 2 ~ 10, a2_x5 == 3 ~ 20,
+        a2_x5 == 4 ~ 40, a2_x5 == 5 ~ 60, a2_x5 == 6 ~ 80,
+        a2_x5 == 7 ~ 120, a2_x5 == 8 ~ 150, a2_x5 == 9 ~ 200, a2_x5 == 10 ~ 250
+      )
+    )
+  
+  return(raw_data)
 }
+
 
 # Read all files into a list of data frames
 raw_data <- list.files("data", full.names = TRUE, recursive = TRUE, pattern = "covariates") %>%
@@ -251,22 +278,6 @@ educ_summary <- data %>%
   mutate(percentage = n / sum(n) * 100) %>%
   arrange(desc(n))
 
-total_pref1_scores <- fullchoice %>%
-  group_by(RID) %>%
-  summarise(total_pref1 = sum(pref1, na.rm = TRUE))
-
-total_pref1_scores <- total_pref1_scores %>%
-  mutate(protester = case_when(
-    total_pref1 == 20 ~ 0, # Absolute supporter
-    total_pref1 > 13 ~ 1,  # No protester/No absolute supporter
-    total_pref1 > 10 & total_pref1 <= 13 ~ 2,  # Moderate Protester
-    total_pref1 == 10 ~ 3,  # Absolute protester
-    TRUE ~ NA_real_  # Handle cases where total_pref1 is NA or below threshold
-  ))
-#table(total_pref1_scores$protester)
-
-data <- data %>%
-  left_join(total_pref1_scores %>% dplyr::select(RID, total_pref1, protester), by = "RID")
 
 
 
@@ -280,59 +291,6 @@ data <- data %>%
 
 
 
-
-
-
-
-
-
-
-
-##### Create & Check Database ####
-
-database <- fullchoice %>% 
-  mutate(Dummy_pa_half = case_when(a2_x2 == 2 ~1, TRUE~0),
-         Dummy_pa_full = case_when(a2_x2 == 3 ~1, TRUE~0),
-         Dummy_hnv_visible = case_when(a2_x4 == 2 ~1, TRUE~0),
-         hnv_att = case_when(
-           dce_version %in% c(1, 2) & a2_x3 == 1 ~ sq_hnv_area + 100,
-           dce_version %in% c(1, 2) & a2_x3 == 2 ~ sq_hnv_area + 200,
-           dce_version %in% c(1, 2) & a2_x3 == 3 ~ sq_hnv_area + 300,
-           dce_version %in% c(1, 2) & a2_x3 == 4 ~ sq_hnv_area + 500,
-           dce_version %in% c(1, 2) & a2_x3 == 5 ~ sq_hnv_area + 800,
-           dce_version %in% c(3, 4) & a2_x3 == 1 ~ sq_hnv_area + 200,
-           dce_version %in% c(3, 4) & a2_x3 == 2 ~ sq_hnv_area + 400,
-           dce_version %in% c(3, 4) & a2_x3 == 3 ~ sq_hnv_area + 600,
-           dce_version %in% c(3, 4) & a2_x3 == 4 ~ sq_hnv_area + 1000,
-           dce_version %in% c(3, 4) & a2_x3 == 5 ~ sq_hnv_area + 1600
-         ),
-         pa_att = case_when(
-           dce_version %in% c(1, 2) & a2_x1 == 1 ~ sq_pa_area + 100,
-           dce_version %in% c(1, 2) & a2_x1 == 2 ~ sq_pa_area + 200,
-           dce_version %in% c(1, 2) & a2_x1 == 3 ~ sq_pa_area + 300,
-           dce_version %in% c(1, 2) & a2_x1 == 4 ~ sq_pa_area + 500,
-           dce_version %in% c(1, 2) & a2_x1 == 5 ~ sq_pa_area + 800,
-           dce_version %in% c(3, 4) & a2_x1 == 1 ~ sq_pa_area + 200,
-           dce_version %in% c(3, 4) & a2_x1 == 2 ~ sq_pa_area + 400,
-           dce_version %in% c(3, 4) & a2_x1 == 3 ~ sq_pa_area + 600,
-           dce_version %in% c(3, 4) & a2_x1 == 4 ~ sq_pa_area + 1000,
-           dce_version %in% c(3, 4) & a2_x1 == 5 ~ sq_pa_area + 1600
-         ),
-         cost_att = case_when(a2_x5 == 1 ~ 5, a2_x5 == 2 ~ 10,
-                              a2_x5 == 3 ~ 20, a2_x5 == 4 ~ 40,
-                              a2_x5 == 5 ~ 60, a2_x5 == 6 ~ 80,
-                              a2_x5 == 7 ~ 120, a2_x5 == 8 ~ 150,
-                              a2_x5 == 9 ~ 200, a2_x5 == 10 ~ 250))
-
-
-
-
-
-#### Calculate share of people who zoom on each cc card 
-database <- database %>%
-  mutate(across(c(getZoom1, getZoom2, getZoom3, getZoom4, getZoom5, getZoom6, getZoom7, getZoom8, getZoom9, getZoom10),
-                ~ ifelse(is.na(.), 0, ifelse(. > 0, 1, 0)), 
-                .names = "zoom_{col}"))
 
 # Step 2: Calculate the share of people who zoomed for each getZoom column
 zoom_summary_mobile <- database %>%
@@ -358,60 +316,10 @@ zoom_cc_card <- ggplot(zoom_summary_long_mobile, aes(x = Zoom_Variable, y = Zoom
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 
-extract_device_type <- function(ua_string) {
-  if (grepl("Windows", ua_string, ignore.case = TRUE)) {
-    return("Windows")
-  } else if (grepl("Macintosh|Mac OS X", ua_string, ignore.case = TRUE)) {
-    return("Mac")
-  } else if (grepl("Linux", ua_string, ignore.case = TRUE)) {
-    return("Linux")
-  } else if (grepl("Android", ua_string, ignore.case = TRUE)) {
-    return("Android")
-  } else if (grepl("iPhone", ua_string, ignore.case = TRUE)) {
-    return("iPhone")
-  } else if (grepl("iPad", ua_string, ignore.case = TRUE)) {
-    return("iPad")
-  } else if (grepl("CrOS", ua_string, ignore.case = TRUE)) {
-    return("Chrome OS")
-  } else {
-    return("Other")
-  }
-}
-
-# Apply the function to create a new column in the dataframe
-data <- data %>%
-  mutate(device_type = sapply(respondent_ua, extract_device_type))
 
 
-extract_device_category <- function(ua_string) {
-  
-  # Check for Windows or Mac which are typically laptops or desktops
-  if (grepl("Windows", ua_string, ignore.case = TRUE)) {
-    return("Laptop/Desktop")
-  } else if (grepl("Macintosh|Mac OS X", ua_string, ignore.case = TRUE)) {
-    return("Laptop/Desktop")
-  } else if (grepl("CrOS", ua_string, ignore.case = TRUE)) { # Chrome OS devices are typically laptops
-    return("Laptop/Desktop")
-    
-    # Check for Android devices - check if they are mobile or tablets
-  } else if (grepl("Android", ua_string, ignore.case = TRUE)) {
-    if (grepl("Mobile", ua_string, ignore.case = TRUE)) {
-      return("Mobile Phone")
-    } else {
-      return("Tablet")
-    }
-    
-    # Check for iPhones and iPads
-  } else if (grepl("iPhone", ua_string, ignore.case = TRUE)) {
-    return("Mobile Phone")
-  } else if (grepl("iPad", ua_string, ignore.case = TRUE)) {
-    return("Tablet")
-    
-    # Any other device type
-  } else {
-    return("Other/Unknown")
-  }
-}
+
+
 
 # Apply the function to create a new column for the device category in the dataframe
 data <- data %>%
