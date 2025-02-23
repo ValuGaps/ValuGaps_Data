@@ -10,14 +10,17 @@ library(tidyr)
 
 # source("Scripts/get_data.R")
 
-# Get rid of annoying dates
-# filerename <-function(x){
-# 
-#  file.rename(x, gsub("__", "_", x))
-#   return(x)
-# }
-# 
-# purrr::map(list.files("data/", full.names = TRUE, recursive = T), filerename)
+#Get rid of annoying dates
+
+
+filerename <-function(x){
+
+ #file.rename(x, gsub("\\d{4}[-_]\\d{2}[-_]\\d{2}", "", x))
+  file.rename(x, gsub("__", "_", x))
+  return(x)
+}
+
+purrr::map(list.files("data/", full.names = TRUE, recursive = T), filerename)
 
 ###### Readin all covariate files  ##### 
 
@@ -190,7 +193,7 @@ read_cov <- function(x) {
       
       # Convert character variables to appropriate types
       across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
-      across(any_of(c("lat","lon","birthyralt_other","natvisit_company","forest_size", "natvisit_next12m")), as.numeric),
+      across(any_of(c("lat","lon","birthyralt_other","natvisit_company","forest_size", "natvisit_next12m", "false_zip")), as.numeric),
     )
   
   return(raw_data)
