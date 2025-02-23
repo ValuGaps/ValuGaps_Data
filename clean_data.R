@@ -12,15 +12,15 @@ library(tidyr)
 
 #Get rid of annoying dates
 
-
-filerename <-function(x){
-
- #file.rename(x, gsub("\\d{4}[-_]\\d{2}[-_]\\d{2}", "", x))
-  file.rename(x, gsub("__", "_", x))
-  return(x)
-}
-
-purrr::map(list.files("data/", full.names = TRUE, recursive = T), filerename)
+# 
+# filerename <-function(x){
+# 
+#  #file.rename(x, gsub("\\d{4}[-_]\\d{2}[-_]\\d{2}", "", x))
+#   file.rename(x, gsub("__", "_", x))
+#   return(x)
+# }
+# 
+# purrr::map(list.files("data/", full.names = TRUE, recursive = T), filerename)
 
 ###### Readin all covariate files  ##### 
 
