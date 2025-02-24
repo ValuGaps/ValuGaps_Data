@@ -132,6 +132,41 @@ read_cov <- function(x) {
       healthphys_recode = coalesce(healthphys, healthphys_mobile) - 1,
       healthpsych_recode = coalesce(healthpsych, healthpsych_mobile) - 1,
       
+      
+      # recode househole income
+            hhnetinc_recode = factor(hhnetinc, levels = c('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'),
+                               labels = c('weniger als 500 Euro', '500 - 999 Euro', '1000 - 1499 Euro',
+                                          '1500 - 1999 Euro', '2000 - 2499 Euro', '2500 - 2999 Euro',
+                                          '3000 - 3499 Euro', '3500 - 3999 Euro', '4000 - 4999 Euro',
+                                          'mehr als 5000 Euro', 'k.A.')),
+      hhnetinc_numeric = case_when(
+        hhnetinc == '1' ~ 250,
+        hhnetinc == '2' ~ 750,
+        hhnetinc == '3' ~ 1250,
+        hhnetinc == '4' ~ 1750,
+        hhnetinc == '5' ~ 2250,
+        hhnetinc == '6' ~ 2750,
+        hhnetinc == '7' ~ 3250,
+        hhnetinc == '8' ~ 3750,
+        hhnetinc == '9' ~ 4500,
+        hhnetinc == '10' ~ 5500,
+        TRUE ~ NA_real_  # Exclude 'k.A.'
+      ),
+      
+      # Recode voting and protest variables
+      voting = factor(pol_btw, levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9"),
+                      labels = c("CDU/CSU", "SPD", "BSW", "AfD", "Die Linke", "Die Grünen", "FDP", "Keine Angabe", "Sonstige")),
+      protest_1_recode = factor(protest_1, levels = c("1", "2", "3", "4", "5", "6"),
+                                labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
+      protest_2_recode = factor(protest_2, levels = c("1", "2", "3", "4", "5", "6"),
+                                labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
+      protest_3_recode = factor(protest_3, levels = c("1", "2", "3", "4", "5", "6"),
+                                labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
+      protest_4_recode = factor(protest_4, levels = c("1", "2", "3", "4", "5", "6"),
+                                labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
+      protest_5_recode = factor(protest_5, levels = c("1", "2", "3", "4", "5", "6"),
+                                labels = c("Stimme nicht zu", "Stimme eher nicht zu", "Weder noch", "Stimme eher zu", "Stimme voll und ganz zu", "K.A.")),
+      
       # Recode urban vs rural category
       urban_rural = case_when(
         q2_1 < 3 ~ "Village",
@@ -144,14 +179,29 @@ read_cov <- function(x) {
       hours_spend = replace_na(as.numeric(hours_spend), 0),
       minutes_spend = replace_na(as.numeric(minutes_spend), 0),
       time_spend_tc = hours_spend * 60 + minutes_spend,
+      zoom_first_cc = case_when(getZoom1 > 0 ~ 1, TRUE~0),
+      payment_distribution = case_when(q27_2 == 1 ~ "Progressive", q27_2 == 2 ~ "Nobody pays", q27_2 == 3 ~ "Equal", q27_2 == 4 ~"Not thought about it"),
+      payment_vision = if ("q1171" %in% names(.)) {
+        case_when(
+          q1171 == 1 ~ "Every household the same",
+          q1171 == 2 ~ "Relative to their income tax",
+          q1171 == 3 ~ "Do not care about distribution",
+          q1171 == 4 ~ "Other"
+        )
+      } else {
+        NA_character_  # Return NA if q1171 does not exist
+      },
       
       # Device-related classifications
       device_type = sapply(respondent_ua, extract_device_type),
       device_category = sapply(respondent_ua, extract_device_category)
     ) %>%
     
-    # Merge timestamps and DCE data
+    # Merge timestamps and calculate time spend on page
     left_join(read_excel(gsub("covariates", "timestamps", x)), by = "RID") %>%
+    mutate(across(starts_with("PAGE_SUBMIT"), ~ . - get(sub("SUBMIT", "DISPLAY", cur_column())), .names = "time_spent_{col}")) %>% 
+    
+    # Merge DCE data
     left_join(dcedata, by = "RID") %>%
     
     # Compute total preference scores and categorize protester types
