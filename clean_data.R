@@ -219,13 +219,24 @@ survey_round_map <- all_data %>%
 
 # Generate `RID_unique`
 all_data <-all_data %>%
-  mutate(RID_unique = survey_round_map[survey_round] + RID)
+  mutate(RID_unique = survey_round_map[survey_round] + RID) %>% 
+  arrange(RID_unique) %>% 
+  rename(RID_sample = RID, RID=RID_unique)
+
+ 
 
 
 database <- all_data %>% 
   filter(STATUS_recoded == "Complete")
 
 
+all_data <- all_data %>% 
+  distinct(RID,.keep_all=TRUE)
+
+complete_data <- all_data %>% 
+  filter(STATUS_recoded == "Complete")
+
+rm(read_cov, survey_round_map)
 
 
          

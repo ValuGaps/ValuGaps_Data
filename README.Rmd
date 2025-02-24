@@ -21,3 +21,23 @@ This git repo allows you to access the data used in the ValuGaps project and und
 If you want to work with the repo, you first have to clone it and download the data via the script `download_data.R`. This script will download the data from OSF and save it in the `data` folder. You can then run the script `clean_data.R` to create the dataset used in the ValuGaps project. This is the recommended dataset to use for the project, as it is cleaned and ready to use.
 
 
+## Description of the output
+
+If you run the script clean_data.R, four objects will be created. For choice analysis, use `database`. For everything else use `complete_data`. The other two objects are `raw_data` and `all_data`. `raw data` is a list that contains the dataset from each survey round. While it is already cleaned, it contains all observations including those that were not complete. `all_data` is the same as `raw_data` but merged into one dataframe. Both `raw_data` and `all_data`  are useful if you want to inspect dropouts or want to include observations that are not complete but may contain the relevant information for your analysis.  
+
+`@tbl-dataset-summary` is a summary of the datasets created by `clean_data.R`:
+
+:::{#tbl-dataset-summary}
+| **Object Name**  | **Description** | **Format** | **Usage** |
+|-----------------|---------------|-----------|----------|
+| `database`     | Prepared dataset specifically for choice analysis. | Dataframe | Choice analysis |
+| `complete_data` | Fully cleaned dataset with only complete observations. | Dataframe | Most analyses (regression, classification, clustering, etc.) |
+| `raw_data`     | A list containing the dataset from each survey round. Includes all observations, even incomplete ones. | List of dataframes | Inspecting dropouts, including incomplete observations for analysis |
+| `all_data`     | Merged version of `raw_data` into a single dataframe. | Dataframe | Same as `raw_data`, but structured as one dataset |
+:::
+
+
+
+
+
+
