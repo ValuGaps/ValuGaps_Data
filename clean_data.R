@@ -174,6 +174,11 @@ read_cov <- function(x) {
         q2_1 < 7 ~ "Large City",
         TRUE ~ NA_character_
       ),
+      dogowner = case_when(
+        dog %in% c(1, 2) ~ 1,  # Assign 1 if dog is 1 or 2
+        dog == 3 ~ 2,          # Assign 2 if dog is 3
+        TRUE ~ NA_real_        # Assign NA for all other cases
+      ),
       
       # Compute time spent in minutes
       hours_spend = replace_na(as.numeric(hours_spend), 0),
