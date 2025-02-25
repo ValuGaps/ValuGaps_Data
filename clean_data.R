@@ -240,7 +240,7 @@ read_cov <- function(x) {
         grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 2 ~ sq_hnv_area + 400,
         grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 3 ~ sq_hnv_area + 600,
         grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 4 ~ sq_hnv_area + 1000,
-        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 5 ~ sq_hnv_area + 1600
+        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 5 ~ sq_hnv_area + 1600),
         
         pa_att = case_when(
           dce_version %in% c(1, 2) & a2_x1 == 1 ~ sq_pa_area + 100,
@@ -269,10 +269,33 @@ read_cov <- function(x) {
       
       # Assign cost based on response levels
       cost_att = case_when(
-        a2_x5 == 1 ~ 5, a2_x5 == 2 ~ 10, a2_x5 == 3 ~ 20,
-        a2_x5 == 4 ~ 40, a2_x5 == 5 ~ 60, a2_x5 == 6 ~ 80,
-        a2_x5 == 7 ~ 120, a2_x5 == 8 ~ 150, a2_x5 == 9 ~ 200, a2_x5 == 10 ~ 250
-      ),
+        grepl("pilot", survey_round) ~ case_when(
+          a2_x5 == 1 ~ 5, 
+          a2_x5 == 2 ~ 10, 
+          a2_x5 == 3 ~ 40,
+          a2_x5 == 4 ~ 80, 
+          a2_x5 == 5 ~ 120, 
+          a2_x5 == 6 ~ 150,
+          a2_x5 == 7 ~ 200, 
+          a2_x5 == 8 ~ 250,
+          TRUE ~ NA_real_
+        ),
+        grepl("main", survey_round) ~ case_when(
+          a2_x5 == 1 ~ 5, 
+          a2_x5 == 2 ~ 10, 
+          a2_x5 == 3 ~ 20,
+          a2_x5 == 4 ~ 40, 
+          a2_x5 == 5 ~ 60, 
+          a2_x5 == 6 ~ 80,
+          a2_x5 == 7 ~ 120, 
+          a2_x5 == 8 ~ 150, 
+          a2_x5 == 9 ~ 200, 
+          a2_x5 == 10 ~ 250,
+          TRUE ~ NA_real_
+        ),
+        TRUE ~ NA_real_  # Default case for unexpected values
+      )
+      ,
       
       # Convert character variables to appropriate types
       across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
