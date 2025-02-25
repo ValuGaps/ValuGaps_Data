@@ -232,12 +232,40 @@ read_cov <- function(x) {
       # Compute hnv_att and pa_att based on experiment type and response
       hnv_att = case_when(
         grepl("exp$|swap$", dce_source) & a2_x3 == 1 ~ sq_hnv_area + 100,
-        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 1 ~ sq_hnv_area + 200
+        grepl("exp$|swap$", dce_source) & a2_x3 == 2 ~ sq_hnv_area + 200,
+        grepl("exp$|swap$", dce_source) & a2_x3 == 3 ~ sq_hnv_area + 300,
+        grepl("exp$|swap$", dce_source) & a2_x3 == 4 ~ sq_hnv_area + 500,
+        grepl("exp$|swap$", dce_source) & a2_x3 == 5 ~ sq_hnv_area + 800,      
+        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 1 ~ sq_hnv_area + 200,
+        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 2 ~ sq_hnv_area + 400,
+        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 3 ~ sq_hnv_area + 600,
+        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 4 ~ sq_hnv_area + 1000,
+        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 5 ~ sq_hnv_area + 1600
+        
+        pa_att = case_when(
+          dce_version %in% c(1, 2) & a2_x1 == 1 ~ sq_pa_area + 100,
+          dce_version %in% c(1, 2) & a2_x1 == 2 ~ sq_pa_area + 200,
+          dce_version %in% c(1, 2) & a2_x1 == 3 ~ sq_pa_area + 300,
+          dce_version %in% c(1, 2) & a2_x1 == 4 ~ sq_pa_area + 500,
+          dce_version %in% c(1, 2) & a2_x1 == 5 ~ sq_pa_area + 800,
+          dce_version %in% c(3, 4) & a2_x1 == 1 ~ sq_pa_area + 200,
+          dce_version %in% c(3, 4) & a2_x1 == 2 ~ sq_pa_area + 400,
+          dce_version %in% c(3, 4) & a2_x1 == 3 ~ sq_pa_area + 600,
+          dce_version %in% c(3, 4) & a2_x1 == 4 ~ sq_pa_area + 1000,
+          dce_version %in% c(3, 4) & a2_x1 == 5 ~ sq_pa_area + 1600
       ),
       pa_att = case_when(
         grepl("exp$|swap$", dce_source) & a2_x1 == 1 ~ sq_pa_area + 100,
-        grepl("exp_2$|swap_2$", dce_source) & a2_x1 == 1 ~ sq_pa_area + 200
-      ),
+        grepl("exp$|swap$", dce_source) & a2_x1 == 2 ~ sq_pa_area + 200,
+        grepl("exp$|swap$", dce_source) & a2_x1 == 3 ~ sq_pa_area + 300,
+        grepl("exp$|swap$", dce_source) & a2_x1 == 4 ~ sq_pa_area + 500,
+        grepl("exp$|swap$", dce_source) & a2_x1 == 5 ~ sq_pa_area + 800,
+        grepl("exp_2$|swap_2$", dce_source) & a2_x1 == 1 ~ sq_pa_area + 200,
+        grepl("exp_2$|swap_2$", dce_source) & a2_x1 == 2 ~ sq_pa_area + 400,
+        grepl("exp_2$|swap_2$", dce_source) & a2_x1 == 3 ~ sq_pa_area + 600,
+        grepl("exp_2$|swap_2$", dce_source) & a2_x1 == 4 ~ sq_pa_area + 1000,
+        grepl("exp_2$|swap_2$", dce_source) & a2_x1 == 5 ~ sq_pa_area + 1600
+        ),
       
       # Assign cost based on response levels
       cost_att = case_when(
