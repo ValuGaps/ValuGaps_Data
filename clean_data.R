@@ -1,6 +1,6 @@
 
 
-rm(list=ls())
+
 
 library(tidyverse)
 library(readxl)
@@ -120,6 +120,7 @@ read_cov <- function(x) {
         gender == 3 ~ "diverse",
         gender == 4 ~ "na"
       ),
+      gender_male = case_when(gender==1 ~ 1, TRUE~0),
       
       # Convert percentage-based numeric variables
       sq_hnv_share = as.numeric(gsub("%", "", sq_hnv_share)),
@@ -231,41 +232,30 @@ read_cov <- function(x) {
       
       # Compute hnv_att and pa_att based on experiment type and response
       hnv_att = case_when(
-        grepl("exp$|swap$", dce_source) & a2_x3 == 1 ~ sq_hnv_area + 100,
-        grepl("exp$|swap$", dce_source) & a2_x3 == 2 ~ sq_hnv_area + 200,
-        grepl("exp$|swap$", dce_source) & a2_x3 == 3 ~ sq_hnv_area + 300,
-        grepl("exp$|swap$", dce_source) & a2_x3 == 4 ~ sq_hnv_area + 500,
-        grepl("exp$|swap$", dce_source) & a2_x3 == 5 ~ sq_hnv_area + 800,      
-        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 1 ~ sq_hnv_area + 200,
-        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 2 ~ sq_hnv_area + 400,
-        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 3 ~ sq_hnv_area + 600,
-        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 4 ~ sq_hnv_area + 1000,
-        grepl("exp_2$|swap_2$", dce_source) & a2_x3 == 5 ~ sq_hnv_area + 1600),
+        dce_version %in% c(1, 2) & a2_x3 == 1 ~ sq_hnv_area + 100,
+        dce_version %in% c(1, 2) & a2_x3 == 2 ~ sq_hnv_area + 200,
+        dce_version %in% c(1, 2) & a2_x3 == 3 ~ sq_hnv_area + 300,
+        dce_version %in% c(1, 2) & a2_x3 == 4 ~ sq_hnv_area + 500,
+        dce_version %in% c(1, 2) & a2_x3 == 5 ~ sq_hnv_area + 800,
         
-        pa_att = case_when(
-          dce_version %in% c(1, 2) & a2_x1 == 1 ~ sq_pa_area + 100,
-          dce_version %in% c(1, 2) & a2_x1 == 2 ~ sq_pa_area + 200,
-          dce_version %in% c(1, 2) & a2_x1 == 3 ~ sq_pa_area + 300,
-          dce_version %in% c(1, 2) & a2_x1 == 4 ~ sq_pa_area + 500,
-          dce_version %in% c(1, 2) & a2_x1 == 5 ~ sq_pa_area + 800,
-          dce_version %in% c(3, 4) & a2_x1 == 1 ~ sq_pa_area + 200,
-          dce_version %in% c(3, 4) & a2_x1 == 2 ~ sq_pa_area + 400,
-          dce_version %in% c(3, 4) & a2_x1 == 3 ~ sq_pa_area + 600,
-          dce_version %in% c(3, 4) & a2_x1 == 4 ~ sq_pa_area + 1000,
-          dce_version %in% c(3, 4) & a2_x1 == 5 ~ sq_pa_area + 1600
+        dce_version %in% c(3, 4) & a2_x3 == 1 ~ sq_hnv_area + 200,
+        dce_version %in% c(3, 4) & a2_x3 == 2 ~ sq_hnv_area + 400,
+        dce_version %in% c(3, 4) & a2_x3 == 3 ~ sq_hnv_area + 600,
+        dce_version %in% c(3, 4) & a2_x3 == 4 ~ sq_hnv_area + 1000,
+        dce_version %in% c(3, 4) & a2_x3 == 5 ~ sq_hnv_area + 1600
       ),
       pa_att = case_when(
-        grepl("exp$|swap$", dce_source) & a2_x1 == 1 ~ sq_pa_area + 100,
-        grepl("exp$|swap$", dce_source) & a2_x1 == 2 ~ sq_pa_area + 200,
-        grepl("exp$|swap$", dce_source) & a2_x1 == 3 ~ sq_pa_area + 300,
-        grepl("exp$|swap$", dce_source) & a2_x1 == 4 ~ sq_pa_area + 500,
-        grepl("exp$|swap$", dce_source) & a2_x1 == 5 ~ sq_pa_area + 800,
-        grepl("exp_2$|swap_2$", dce_source) & a2_x1 == 1 ~ sq_pa_area + 200,
-        grepl("exp_2$|swap_2$", dce_source) & a2_x1 == 2 ~ sq_pa_area + 400,
-        grepl("exp_2$|swap_2$", dce_source) & a2_x1 == 3 ~ sq_pa_area + 600,
-        grepl("exp_2$|swap_2$", dce_source) & a2_x1 == 4 ~ sq_pa_area + 1000,
-        grepl("exp_2$|swap_2$", dce_source) & a2_x1 == 5 ~ sq_pa_area + 1600
-        ),
+        dce_version %in% c(1, 2) & a2_x1 == 1 ~ sq_pa_area + 100,
+        dce_version %in% c(1, 2) & a2_x1 == 2 ~ sq_pa_area + 200,
+        dce_version %in% c(1, 2) & a2_x1 == 3 ~ sq_pa_area + 300,
+        dce_version %in% c(1, 2) & a2_x1 == 4 ~ sq_pa_area + 500,
+        dce_version %in% c(1, 2) & a2_x1 == 5 ~ sq_pa_area + 800,
+        
+        dce_version %in% c(3, 4) & a2_x1 == 1 ~ sq_pa_area + 200,
+        dce_version %in% c(3, 4) & a2_x1 == 2 ~ sq_pa_area + 400,
+        dce_version %in% c(3, 4) & a2_x1 == 3 ~ sq_pa_area + 600,
+        dce_version %in% c(3, 4) & a2_x1 == 4 ~ sq_pa_area + 1000,
+        dce_version %in% c(3, 4) & a2_x1 == 5 ~ sq_pa_area + 1600),
       
       # Assign cost based on response levels
       cost_att = case_when(
@@ -280,7 +270,7 @@ read_cov <- function(x) {
           a2_x5 == 8 ~ 250,
           TRUE ~ NA_real_
         ),
-        grepl("main", survey_round) ~ case_when(
+        grepl("Main", survey_round) ~ case_when(
           a2_x5 == 1 ~ 5, 
           a2_x5 == 2 ~ 10, 
           a2_x5 == 3 ~ 20,
@@ -296,6 +286,19 @@ read_cov <- function(x) {
         TRUE ~ NA_real_  # Default case for unexpected values
       )
       ,
+      
+      survey_round_pooled = case_when(grepl("pilot", survey_round) ~ "Pilot", TRUE ~ "Main"),
+      device = case_when(
+        str_detect(respondent_ua, "iPhone") ~ "iPhone",
+        str_detect(respondent_ua, "iPad") ~ "iPad",
+        str_detect(respondent_ua, "Android") ~ "Android",
+        TRUE ~ "Laptop/Other"
+      ),
+      NR_score = ifelse(uhh != 3 & nr6_1 != 6 & nr6_2 != 6 & nr6_3 != 6 &
+                                 nr6_4 != 6 & nr6_5 != 6 & nr6_6 != 6,
+                               (nr6_1 + nr6_2 + nr6_3 + nr6_4 + nr6_5 + nr6_6) / 6, 
+                               NA),
+      
       
       # Convert character variables to appropriate types
       across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
