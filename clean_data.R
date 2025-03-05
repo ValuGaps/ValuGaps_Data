@@ -229,7 +229,8 @@ read_cov <- function(x) {
       Dummy_pa_half = case_when(a2_x2 == 2 ~ 1, TRUE ~ 0),
       Dummy_pa_full = case_when(a2_x2 == 3 ~ 1, TRUE ~ 0),
       Dummy_hnv_visible = case_when(a2_x4 == 2 ~ 1, TRUE ~ 0),
-      
+      Dummy_pa_no = case_when(a2_x2 == 1 ~ 1, TRUE ~ 0),
+      Dummy_hnv_no = case_when(a2_x4 == 1 ~ 1, TRUE ~ 0),
       # Compute hnv_att and pa_att based on experiment type and response
       hnv_att = case_when(
         dce_version %in% c(1, 2) & a2_x3 == 1 ~ sq_hnv_area + 100,
@@ -286,6 +287,8 @@ read_cov <- function(x) {
         TRUE ~ NA_real_  # Default case for unexpected values
       )
       ,
+      
+      scope_dce = case_when(dce_version %in% c(1,2)~"low", TRUE~"high"),
       
       survey_round_pooled = case_when(grepl("pilot", survey_round) ~ "Pilot", TRUE ~ "Main"),
       device = case_when(
