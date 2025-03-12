@@ -1,9 +1,9 @@
 #TCM_analysis
-
+library(dplyr)
 #write.csv(all_data, "data_tcm/all_data.csv")
 
 df = read.csv("data_tcm/all_data.csv")
-
+data_api_out = read.csv("data_tcm/data_api_joined.csv")
 
 colnames(df)
 
@@ -13,10 +13,20 @@ colnames(df)
 #                    "nv_2a", "nv_2a_other", "nv_2a_RAND", "lat_tc", "lon_tc", "q91test_1",
 #                    "q91test_2", "q91test_3", "q91test_1", "q91test_1"
 #                    )]
+which(colnames(df)=="RID")
 
-temporary = df[,c(192:262)]
+temporary = df[,c(551,191:262)]
 
-tcm = temporary[!is.na(temporary$tc_map),]
+
+
+tcm = temporary[!is.na(temporary$tc1),]
+tcm_treatments = tcm[!is.na(tcm$tc_map),]
+
+tcm_treatments = left_join(tcm_treatments,data_api_out,by="RID")
+
+###################### messy code below ####################
+
+tcm_treatments
 
 #treatments summary
 table(tcm$tc_map)
@@ -29,6 +39,8 @@ table(tcm$tc_calc,tcm$tc_avg) #ok!
 tcm$natvis_fav_og = tcm$natvisit_fav
 tcm$natvis_fav_fin =  tcm$natvisit_fav1
 tcm$natvis_fav_fin = ifelse(is.na(tcm$natvis_fav_fin), tcm$natvisit_fav2, tcm$natvis_fav_fin)
+
+read.csv()
 
 #idea
 #funkcja wybierajaca subsety?
