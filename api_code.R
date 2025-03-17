@@ -27,7 +27,6 @@ df$car = ifelse(df$natvis_vhc_2==2 & !is.na(df$natvis_vhc_2),1,0)
 #older wave, thats ok
 #a = temporary[is.na(df$tc1),]
 
-table(data_for_api$on_foot)
 
 data_for_api = df[!is.na(df$tc1) & !is.na(df$lon_tc),c("RID","lat", "lon","lat_tc","lon_tc", "on_foot","bike", "car")]
 
@@ -82,6 +81,6 @@ for (i in 1:length(data_api_out$RID)) {
   data_api_out$mean_time[i] = mean(c(data_api_out$time_walk[i], data_api_out$time_bike[i], data_api_out$time_car[i]), na.rm = TRUE)
 }
 
-write.csv(data_api_out,"data_tcm/data_api_joined.csv")
+write.csv(data_api_out,"data_tcm/data_api_joined.csv", row.names = FALSE)
 
 
