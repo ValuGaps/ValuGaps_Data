@@ -151,11 +151,10 @@ ds$timeline= abs(ds$tc_timeline-2)
 ds$calc= abs(ds$tc_calc-2)
 ds$avg= abs(ds$tc_avg-2)
 
-summary(m1 <- glm.nb(natvis_fav_fin ~ mean_dist + map *timeline *calc + avg , data = ds))
+summary(m1 <- glm.nb(natvis_fav_fin ~ mean_dist * map *timeline *calc*avg , data = ds))
 
-summary(m1 <- glm.nb(natvisit_last12m ~ mean_dist + timeline *calc + avg , data = ds))
+summary(m1 <- glm.nb(natvisit_last12m ~ mean_dist * timeline *calc + avg , data = ds))
 
-ds$me
 #####
 
 table(ds$nv_2a)

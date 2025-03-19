@@ -26,7 +26,6 @@ library(tidyr)
 
 
 
-
 read_cov <- function(x) {
   
   # Function to categorize device based on user agent string
@@ -307,7 +306,7 @@ read_cov <- function(x) {
       # Convert character variables to appropriate types
       across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
       across(any_of(c("lat","lon","birthyralt_other","natvisit_company","forest_size", "natvisit_next12m", "false_zip", "allocationa_0630", "allocationb_0630", "slope_0630", "to_a_max_0630",
-                      "to_b_max_0630", "allocationa_0820", "allocationb_0820", "slope_0820" ,"to_a_max_0820", "to_b_max_0820")), as.numeric),
+                      "to_b_max_0630", "allocationa_0820", "allocationb_0820", "slope_0820" ,"to_a_max_0820", "to_b_max_0820", "hhsize")), as.numeric),
     )
   
   return(raw_data)

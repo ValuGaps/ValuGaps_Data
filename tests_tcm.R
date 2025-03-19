@@ -106,7 +106,7 @@ wilcox_print(sub_sample_1,sub_sample_2)
 ###fav trips
 #explore number of trips
 sub_sample_1 = ds$natvis_fav_fin[ds$tc_map==1 & !is.na(ds$natvis_fav_fin)]
-sub_sample_2 = ds$natvis_fav_fin[ds$tc_map==2]
+sub_sample_2 = ds$natvis_fav_fin[ds$tc_map==2 & !is.na(ds$natvis_fav_fin)]
 wilcox_print(sub_sample_1,sub_sample_2)
 
 sub_sample_1 = ds$natvis_fav_fin[ds$tc_timeline==1 & !is.na(ds$natvis_fav_fin)]
@@ -148,6 +148,3 @@ sub_sample_2 = ds$time_on_site[ds$tc_avg==2& !is.na(ds$time_on_site)]
 wilcox_print(sub_sample_1,sub_sample_2)
 
 
-sub_sample_1 = ds$natvisit_next12m[ds$tc_avg==1& !is.na(ds$natvisit_next12m)]
-sub_sample_2 = ds$natvisit_next12m[ds$tc_avg==2& !is.na(ds$natvisit_next12m)]
-wilcox_print(sub_sample_1,sub_sample_2)

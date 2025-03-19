@@ -1,4 +1,5 @@
 #api
+rm(list = ls())
 library(dplyr)
 
 
