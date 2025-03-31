@@ -12,17 +12,55 @@ library(tidyr)
 
 #Get rid of annoying dates
 
-# 
+
 # filerename <-function(x){
 # 
 #  #file.rename(x, gsub("\\d{4}[-_]\\d{2}[-_]\\d{2}", "", x))
-#   file.rename(x, gsub("__", "_", x))
+# #file.rename(x, gsub("VALUGAPS_Main_3", "Main_6", x))
+#   
+#   stringr::str_replace_all(x, "(DCE)|([ECTS])", function(z) {
+#     if (!is.na(z[1]) && z[1] == "DCE") {
+#       return("DCE")  # keep it unchanged
+#     } else {
+#       return(tolower(z))
+#     }
+#   })
+#   
 #   return(x)
 # }
+
+# filerename <- function(x) {
+#   # Generate new names
+#   new_names <- stringr::str_replace_all(x, "(DCE)|([ECTS])", function(z) {
+#     if (!is.na(z[1]) && z[1] == "DCE") {
+#       return("DCE")
+#     } else {
+#       return(tolower(z))
+#     }
+#   })
+#   
+#   # Perform the renaming
+#   file.rename(x, new_names)
+#   
+#   # Show what changed
+#   result <- data.frame(
+#     original = x,
+#     renamed  = new_names,
+#     stringsAsFactors = FALSE
+#   )
+#   
+#   print(result)
+#   invisible(result)
+# }
 # 
-# purrr::map(list.files("data/", full.names = TRUE, recursive = T), filerename)
+# 
+# 
+# 
+# purrr::map(list.files("data/main_study/Main_6/", full.names = TRUE, recursive = T), filerename)
 
 ###### Readin all covariate files  ##### 
+
+
 
 
 
@@ -306,7 +344,7 @@ read_cov <- function(x) {
       # Convert character variables to appropriate types
       across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
       across(any_of(c("lat","lon","birthyralt_other","natvisit_company","forest_size", "natvisit_next12m", "false_zip", "allocationa_0630", "allocationb_0630", "slope_0630", "to_a_max_0630",
-                      "to_b_max_0630", "allocationa_0820", "allocationb_0820", "slope_0820" ,"to_a_max_0820", "to_b_max_0820", "hhsize")), as.numeric),
+                      "to_b_max_0630", "allocationa_0820", "allocationb_0820", "slope_0820" ,"to_a_max_0820", "to_b_max_0820", "hhsize", "postcode")), as.numeric),
     )
   
   return(raw_data)

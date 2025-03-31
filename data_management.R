@@ -23,7 +23,7 @@ cloudR::download_and_extract_zip(url = "https://files.de-1.osf.io/v1/resources/9
 ## use this to upload data to OSF
  osf_retrieve_node("swczk") %>%  
   osf_ls_nodes(pattern = "Data") %>% 
-  osf_upload(path = list.files(path = "data/", full.names = TRUE),recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "overwrite")
+  osf_upload(path = list.files(path = "data/", full.names = TRUE),recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "skip")
 
 
 
