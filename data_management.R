@@ -17,18 +17,22 @@ project <- osf_retrieve_node("swczk") %>%
 
 ## or a public version
 
-cloudR::download_and_extract_zip(url = "https://files.de-1.osf.io/v1/resources/9dw2j/providers/osfstorage/?view_only=015b3489509c42cbb3d7bb38f0e02d39&zip=",dest_folder = "data" , zip_name = "data.zip")
+cloudR::download_and_extract_zip(url = "https://files.de-1.osf.io/v1/resources/9dw2j/providers/osfstorage/?view_only=015b3489509c42cbb3d7bb38f0e02d39&zip=",dest_folder = "data/old" , zip_name = "data.zip")
 
 
-## use this to upload data to OSF
- osf_retrieve_node("swczk") %>%  
-  osf_ls_nodes(pattern = "Data") %>% 
+## use this to upload survey data to OSF
+ osf_retrieve_node("9dw2j") %>% 
+  osf_upload(path = list.files(path = "data/", full.names = TRUE),recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "skip")
+
+## for all other secondary data
+osf_retrieve_node("e2zvy")  %>%  
   osf_upload(path = list.files(path = "data/", full.names = TRUE),recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "skip")
 
 
 
-
-
+## for all estimated models as RDS files.
+osf_retrieve_node("4zu7w")  %>%  
+  osf_upload(path = list.files(path = "data/", full.names = TRUE),recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "skip")
 
 
 
