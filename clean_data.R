@@ -164,7 +164,9 @@ read_cov <- function(x) {
       sq_hnv_share = as.numeric(gsub("%", "", sq_hnv_share)),
       sq_pa_share = as.numeric(gsub("%", "", sq_pa_share)),
       cv = as.numeric(cv),
-      birthyear = as.numeric(birthyralt_other),
+      birthyear_uncleaned = as.numeric(birthyralt_other),
+      birthyear = ifelse(birthyear_uncleaned < 1900 | birthyear_uncleaned > 3000, NA, birthyear_uncleaned),
+      
       
       # Recode satisfaction, health, and income variables
       lifesat_recode = coalesce(lifesat, lifesat_mobile) - 1,
