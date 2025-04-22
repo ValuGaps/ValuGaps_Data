@@ -12,23 +12,17 @@ library(tidyr)
 
 #Get rid of annoying dates
 
-
+# 
 # filerename <-function(x){
 # 
-#  #file.rename(x, gsub("\\d{4}[-_]\\d{2}[-_]\\d{2}", "", x))
-# #file.rename(x, gsub("VALUGAPS_Main_3", "Main_6", x))
-#   
-#   stringr::str_replace_all(x, "(DCE)|([ECTS])", function(z) {
-#     if (!is.na(z[1]) && z[1] == "DCE") {
-#       return("DCE")  # keep it unchanged
-#     } else {
-#       return(tolower(z))
-#     }
-#   })
-#   
+#  file.rename(x, gsub("_\\d{4}[-_]\\d{2}[-_]\\d{2}", "", x))
+# #file.rename(x, gsub("VALUGAPs_Main_3_Round_5", "Main_7", x))
+# 
+# 
+# 
 #   return(x)
 # }
-
+# 
 # filerename <- function(x) {
 #   # Generate new names
 #   new_names <- stringr::str_replace_all(x, "(DCE)|([ECTS])", function(z) {
@@ -38,17 +32,17 @@ library(tidyr)
 #       return(tolower(z))
 #     }
 #   })
-#   
+# 
 #   # Perform the renaming
 #   file.rename(x, new_names)
-#   
+# 
 #   # Show what changed
 #   result <- data.frame(
 #     original = x,
 #     renamed  = new_names,
 #     stringsAsFactors = FALSE
 #   )
-#   
+# 
 #   print(result)
 #   invisible(result)
 # }
@@ -56,7 +50,7 @@ library(tidyr)
 # 
 # 
 # 
-# purrr::map(list.files("data/main_study/Main_6/", full.names = TRUE, recursive = T), filerename)
+# purrr::map(list.files("data/main_study/Main_7/", full.names = TRUE, recursive = T), filerename)
 
 ###### Readin all covariate files  ##### 
 
@@ -112,14 +106,13 @@ read_cov <- function(x) {
   
   # Identify DCE files in the same directory and read them
   dcepath <- list.files(dirname(x), full.names = TRUE, pattern = "DCE")
-  
   # Read and merge DCE data
   dcedata <- dcepath %>%
     purrr::set_names(gsub("\\.xlsx", "", basename(.))) %>%
     map(read_excel) %>%
     bind_rows(.id = "dce_source") %>%
-    mutate(pref1 = ifelse(grepl("swap", dce_source), 3 - pref1, pref1))  # Adjust pref1 based on dce_source
-  
+    mutate(RID=as.numeric(RID), pref1 = ifelse(grepl("swap", dce_source), 3 - as.numeric(pref1), as.numeric(pref1)))  # Adjust pref1 based on dce_source
+
   # Read main dataset and process columns
   raw_data <- read_excel(x) %>%
     rename(lat = latlng_wood_SQ_1_1, lon = latlng_wood_SQ_1_2,
@@ -244,8 +237,10 @@ read_cov <- function(x) {
     ) %>%
     
     # Merge timestamps and calculate time spend on page
-    left_join(read_excel(gsub("covariates", "timestamps", x)), by = "RID") %>%
+    left_join(read_excel(gsub("covariates", "timestamps", x) , col_types = "numeric") %>% mutate(RID=as.numeric(RID)), by = "RID") %>%
     mutate(across(starts_with("PAGE_SUBMIT"), ~ . - get(sub("SUBMIT", "DISPLAY", cur_column())), .names = "time_spent_{col}")) %>% 
+    
+
     
     # Merge DCE data
     left_join(dcedata, by = "RID") %>%
@@ -346,7 +341,7 @@ read_cov <- function(x) {
       # Convert character variables to appropriate types
       across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
       across(any_of(c("lat","lon","birthyralt_other","natvisit_company","forest_size", "natvisit_next12m", "false_zip", "allocationa_0630", "allocationb_0630", "slope_0630", "to_a_max_0630",
-                      "to_b_max_0630", "allocationa_0820", "allocationb_0820", "slope_0820" ,"to_a_max_0820", "to_b_max_0820", "hhsize", "postcode")), as.numeric),
+                      "to_b_max_0630", "allocationa_0820", "allocationb_0820", "slope_0820" ,"to_a_max_0820", "to_b_max_0820", "hhsize", "postcode", "pref1")), as.numeric),
     )
   
   return(raw_data)
