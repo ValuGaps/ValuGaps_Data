@@ -1,3 +1,8 @@
+####  ONLY FOR EXPERTS WHO HAVE ACCESS TO THE OSF PROJECT #####
+
+# WARNING!!!!!! YOU SHOULD KNOW WHAT YOU ARE DOING BECAUSE IT CAN DESTROY EVERYTHING
+
+
 library(osfr)
 library(tidyverse)
 
@@ -15,25 +20,41 @@ project <- osf_retrieve_node("swczk") %>%
 
 
 
-## or a public version
 
-cloudR::download_and_extract_zip(url = "https://files.de-1.osf.io/v1/resources/9dw2j/providers/osfstorage/?view_only=015b3489509c42cbb3d7bb38f0e02d39&zip=",dest_folder = "data/old" , zip_name = "data.zip")
-
-
-## use this to upload survey data to OSF
+##### use this to upload survey data to OSF ####
  osf_retrieve_node("9dw2j") %>% 
   osf_upload(path = list.files(path = "data/", full.names = TRUE),recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "skip")
 
 ## for all other secondary data
-osf_retrieve_node("e2zvy")  %>%  
-  osf_upload(path = list.files(path = "data/", full.names = TRUE),recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "skip")
+osf_retrieve_node("e2zvy")  %>%
+  osf_mkdir("germany_shapefiles") %>% 
+  osf_upload(path = list.files(path = "secondary_data/germany_shapefiles", full.names = TRUE, recursive = T ),recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "skip")
 
+
+  
 
 
 ## for all estimated models as RDS files.
-osf_retrieve_node("4zu7w")  %>%  
-  osf_upload(path = list.files(path = "data/", full.names = TRUE),recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "skip")
+
+files <- list.files(path = "Data_and_Output/Estimation_results/MXL", full.names = T)
+filtered_files <- files[!grepl("old", files, ignore.case = TRUE) & grepl("\\.rds$", files, ignore.case = TRUE)]
 
 
+osf_retrieve_node("4zu7w")  %>%
+  osf_mkdir("MXL") %>% 
+  osf_upload(path = filtered_files ,  progress = TRUE, verbose = TRUE, conflicts = "skip")
+ 
 
+
+filescl <- list.files(path = "Data_and_Output/Estimation_results/Clogit/WTP space/", full.names = T)
+filtered_filescl <- filescl[!grepl("old", filescl, ignore.case = TRUE) & grepl("\\.rds$", filescl, ignore.case = TRUE) ]
+
+
+osf_retrieve_node("4zu7w")  %>%
+  osf_mkdir("Clogit/WTP_space") %>% 
+  osf_upload(path = filtered_filescl, progress = TRUE, verbose = TRUE, conflicts = "skip")
+ 
+  
+
+  
 
