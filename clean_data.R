@@ -4,9 +4,8 @@
 
 library(tidyverse)
 library(readxl)
-library(ggpubr)
 library(purrr)
-library(tidyr)
+library(tidylog)
 
 # source("Scripts/get_data.R")
 
