@@ -46,15 +46,26 @@ osf_retrieve_node("4zu7w")  %>%
  
 
 
-filescl <- list.files(path = "Data_and_Output/Estimation_results/Clogit/WTP space/", full.names = T)
+## conditional logit
+
+filescl <- list.files(path = "Results/Clogit/WTP space/", full.names = T)
 filtered_filescl <- filescl[!grepl("old", filescl, ignore.case = TRUE) & grepl("\\.rds$", filescl, ignore.case = TRUE) ]
 
 
 osf_retrieve_node("4zu7w")  %>%
   osf_mkdir("Clogit/WTP_space") %>% 
   osf_upload(path = filtered_filescl, progress = TRUE, verbose = TRUE, conflicts = "skip")
- 
-  
+
+## Hybrid models
+
+filescl <- list.files(path = "Results/HC", full.names = T)
+filtered_filescl <- filescl[!grepl("old", filescl, ignore.case = TRUE) & grepl("\\.rds$", filescl, ignore.case = TRUE) ]
+
+
+
+osf_retrieve_node("4zu7w")  %>%
+  osf_mkdir("HC") %>% 
+  osf_upload(path = "Output/Estimation_results/HC/Hybrid_with_OL_model.rds", progress = TRUE, verbose = TRUE, conflicts = "skip")  
 
   
 
