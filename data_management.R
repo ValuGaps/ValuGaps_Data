@@ -36,13 +36,13 @@ osf_retrieve_node("e2zvy")  %>%
 
 ## for all estimated models as RDS files.
 
-files <- list.files(path = "Data_and_Output/Estimation_results/MXL", full.names = T)
+files <- list.files(path = "Results/MXL", full.names = T)
 filtered_files <- files[!grepl("old", files, ignore.case = TRUE) & grepl("\\.rds$", files, ignore.case = TRUE)]
 
 
 osf_retrieve_node("4zu7w")  %>%
   osf_mkdir("MXL") %>% 
-  osf_upload(path = filtered_files ,  progress = TRUE, verbose = TRUE, conflicts = "skip")
+  osf_upload(path = filtered_files ,  progress = TRUE, verbose = TRUE, conflicts = "replace")
  
 
 
