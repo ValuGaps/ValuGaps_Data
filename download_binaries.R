@@ -24,8 +24,8 @@ cloudR::download_and_extract_zip(url = shapefiles ,dest_folder = "secondary_data
 ## census data
 
 if(!dir.exists("secondary_data/census_agegroups")) {
-  dir.create("secondary_data/census_agegroups")
-  download.file("https://osf.io/download/682dd4e1e0d1f16b33eac9f8/?view_only=f08b8c286f7a49279b5e472826c9090c", destfile = "secondary_data/census_agegroups/1000A-2027_de.xlsx")
+  dir.create("secondary_data/census_agegroups" ,recursive = T)
+  download.file("https://osf.io/download/gefpk/?view_only=f08b8c286f7a49279b5e472826c9090c", destfile = "secondary_data/census_agegroups/1000A-2027_de.xlsx")
    }
 
 
