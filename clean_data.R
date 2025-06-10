@@ -370,17 +370,19 @@ all_data <-all_data %>%
   rename(RID_sample = RID, RID=RID_unique)
 
  
-
+median_dur <- median(complete_data$DURATION)
 
 database <- all_data %>% 
-  filter(STATUS_recoded == "Complete")
+  filter(STATUS_recoded == "Complete") %>% filter(DURATION >= 1/3*median_dur,
+                                                  q27_1_5 == 4)
 
 
 all_data <- all_data %>% 
   distinct(RID,.keep_all=TRUE)
 
 complete_data <- all_data %>% 
-  filter(STATUS_recoded == "Complete")
+  filter(STATUS_recoded == "Complete") %>% filter(DURATION >= 1/3*median_dur,
+                                                  q27_1_5 == 4)
 
 rm(read_cov, survey_round_map)
 
