@@ -24,15 +24,12 @@ cloudR::download_and_extract_zip(url = shapefiles ,dest_folder = "secondary_data
 ## census data
 if(!dir.exists("secondary_data/census")) {
   dir.create("secondary_data/census" ,recursive = T)
-  download_and_extract_zip("herelink", zip_name = "census.zip", dest_folder = "secondary_data/census/old")
+  cloudR::download_and_extract_zip("https://files.de-1.osf.io/v1/resources/e2zvy/providers/osfstorage/682dd4be76df44ca46b06cdd/?view_only=f08b8c286f7a49279b5e472826c9090c&zip=", zip_name = "census.zip", dest_folder = "secondary_data/census/old")
 }
 
 
 
-if(!dir.exists("secondary_data/census_agegroups")) {
-  dir.create("secondary_data/census_agegroups" ,recursive = T)
-  download.file("https://osf.io/download/gefpk/?view_only=f08b8c286f7a49279b5e472826c9090c", mode = "wb", destfile = "secondary_data/census_agegroups/1000A-2027_de.xlsx")
-   }
+
 
 
 ## model results
