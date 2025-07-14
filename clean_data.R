@@ -360,7 +360,7 @@ all_data <- bind_rows(raw_data, .id = "survey_round")
 
 survey_round_map <- all_data %>%
   distinct(survey_round) %>%
-  mutate(prefix = row_number() * 10000) %>%  # Assign a unique 10,000s prefix
+  mutate(prefix = row_number() * 100000) %>%  # Assign a unique 10,000s prefix
   deframe()
 
 # Generate `RID_unique`
@@ -379,10 +379,9 @@ database <- all_data %>%
                                                   q27_1_5 == 4)
 
 
-all_data <- all_data %>% 
-  distinct(RID,.keep_all=TRUE)
 
-complete_data <- all_data %>% 
+complete_data <- database %>% 
+  distinct(RID,.keep_all=TRUE) %>% 
   filter(STATUS_recoded == "Complete") %>% filter(DURATION >= 1/3*median_dur,
                                                   q27_1_5 == 4)
 
