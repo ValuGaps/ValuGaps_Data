@@ -22,6 +22,12 @@ cloudR::download_and_extract_zip(url = shapefiles ,dest_folder = "secondary_data
 
 
 ## census data
+if(!dir.exists("secondary_data/census")) {
+  dir.create("secondary_data/census" ,recursive = T)
+  download_and_extract_zip("herelink", zip_name = "census.zip", dest_folder = "secondary_data/census/old")
+}
+
+
 
 if(!dir.exists("secondary_data/census_agegroups")) {
   dir.create("secondary_data/census_agegroups" ,recursive = T)
