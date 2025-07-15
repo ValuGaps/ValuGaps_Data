@@ -378,7 +378,7 @@ database <- all_data %>%
   filter(STATUS_recoded == "Complete") %>% filter(DURATION >= 1/3*median_dur,
                                                   q27_1_5 == 4)
 
-
+all_data <- all_data %>%   distinct(RID,.keep_all=TRUE)
 
 complete_data <- database %>% 
   distinct(RID,.keep_all=TRUE) %>% 
