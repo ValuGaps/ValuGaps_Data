@@ -28,7 +28,16 @@ if(!dir.exists("secondary_data/census")) {
 }
 
 
-
+## ZIP data
+if (!dir.exists("secondary_data/PLZ_data")) {
+  dir.create("secondary_data/PLZ_data", recursive = TRUE)
+  
+  csv_url <- "https://public.opendatasoft.com/explore/dataset/georef-germany-postleitzahl/download/?format=csv&timezone=Europe/Berlin&lang=en"
+  destfile <- "secondary_data/PLZ_data/georef-germany-postleitzahl.csv"
+  
+  cat("ZIP data not found. Downloading...\n")
+  download.file(csv_url, destfile, mode = "wb")
+}
 
 
 
