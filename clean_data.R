@@ -389,7 +389,54 @@ rm(read_cov, survey_round_map, all_data_complete)
 
 
          
+## Assign federal_state using ZIP codes and spatial fallback ##
+# Load and clean postal code reference data
+postal_file <- read.csv(destfile, sep = ";") %>%
+  select(name, plz_name, lan_name) %>%
+  rename(postcode = name, zip_name = plz_name, federal_state = lan_name) %>%
+  group_by(postcode, federal_state) %>%
+  slice(1) %>%  # Keep one entry per (postcode, federal_state) combo
+  ungroup()
 
+# Assign federal_state via unambiguous ZIP codes only
+#    (i.e., ZIPs associated with exactly one federal_state)
+complete_data <- complete_data %>%
+  left_join(
+    postal_file %>%
+      group_by(postcode) %>%
+      filter(n_distinct(federal_state) == 1) %>%
+      slice(1) %>%
+      ungroup() %>%
+      select(postcode, federal_state),
+    by = "postcode"
+  )
+
+# Spatial fallback for cases where federal_state is still missing but lat/lon is available 
+# → Uses administrative boundaries of German states (NAME_1 from GADM)
+conflicted_with_state <- complete_data %>%
+  filter(is.na(federal_state) & !is.na(lat) & !is.na(lon)) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  # Perform spatial join with German federal state boundaries (read directly here)
+  # This assigns the NAME_1 of the state to any point that falls within its boundary
+  st_join(
+    read_sf("secondary_data/germany_shapefiles/", "gadm41_DEU_1")[c("NAME_1")]
+  ) %>%
+  mutate(federal_state = NAME_1) %>%
+  # Drop geometry to return to a regular (non-spatial) data frame
+  st_drop_geometry() %>%
+  select(RID, federal_state)
+
+# Safety check: Make sure there's no duplicated RID before joining
+stopifnot(!any(duplicated(conflicted_with_state$RID)))
+
+# Join spatial fallback into main dataset and update missing federal_state values
+complete_data <- complete_data %>%
+  left_join(conflicted_with_state, by = "RID", suffix = c("", "_spatial")) %>%
+  mutate(federal_state = coalesce(federal_state_spatial, federal_state)) %>%
+  select(-federal_state_spatial)
+
+rm(conflicted_with_state)
+rm(postal_file)
 
 
 
