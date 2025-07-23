@@ -388,10 +388,9 @@ complete_data <- database %>%
 rm(read_cov, survey_round_map, all_data_complete)
 
 
-         
 ## Assign federal_state using ZIP codes and spatial fallback ##
 # Load and clean postal code reference data
-postal_file <- read.csv(destfile, sep = ";") %>%
+postal_file <- read.csv("secondary_data/PLZ_data/georef-germany-postleitzahl.csv", sep = ";") %>%
   select(name, plz_name, lan_name) %>%
   rename(postcode = name, zip_name = plz_name, federal_state = lan_name) %>%
   group_by(postcode, federal_state) %>%
