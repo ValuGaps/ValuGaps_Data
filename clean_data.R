@@ -6,6 +6,7 @@ library(tidyverse)
 library(readxl)
 library(purrr)
 library(tidylog)
+library(sf)
 
 # source("Scripts/get_data.R")
 
