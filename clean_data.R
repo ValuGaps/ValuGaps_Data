@@ -389,69 +389,59 @@ complete_data <- database %>%
 rm(read_cov, survey_round_map, all_data_complete)
 
 
-## Assign federal_state using ZIP codes and spatial fallback ##
-# Load and clean postal code reference data
-postal_file <- read.csv("secondary_data/PLZ_data/georef-germany-postleitzahl.csv", sep = ";") %>%
-  select(name, plz_name, lan_name) %>%
-  rename(postcode = name, zip_name = plz_name, federal_state = lan_name) %>%
-  group_by(postcode, federal_state) %>%
-  slice(1) %>%  # Keep one entry per (postcode, federal_state) combo
-  ungroup()
 
-# Assign federal_state via unambiguous ZIP codes only
-#    (i.e., ZIPs associated with exactly one federal_state)
-complete_data <- complete_data %>%
-  left_join(
-    postal_file %>%
-      group_by(postcode) %>%
-      filter(n_distinct(federal_state) == 1) %>%
-      slice(1) %>%
-      ungroup() %>%
-      select(postcode, federal_state),
-    by = "postcode"
-  )
 
-# Spatial fallback for cases where federal_state is still missing but lat/lon is available 
-# → Uses administrative boundaries of German states (NAME_1 from GADM)
-conflicted_with_state <- complete_data %>%
-  filter(is.na(federal_state) & !is.na(lat) & !is.na(lon)) %>%
+
+# Assign administrative names by spatial join - based on lat,lon
+germany_admin <- read_sf("secondary_data/germany_shapefiles/", "gadm41_DEU_4") %>%
+  select(NAME_1, NAME_2, NAME_3, NAME_4, CC_4)
+
+admin_assignments <- complete_data %>%
+  filter(!is.na(lat), !is.na(lon)) %>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-  # Perform spatial join with German federal state boundaries (read directly here)
-  # This assigns the NAME_1 of the state to any point that falls within its boundary
-  st_join(
-    read_sf("secondary_data/germany_shapefiles/", "gadm41_DEU_1")[c("NAME_1")]
+  st_join(germany_admin, left = FALSE) %>%
+  rename(
+    federal_state = NAME_1,
+    county_name = NAME_2,
+    municipality_name = NAME_3,
+    town_name = NAME_4,
+    ARS = CC_4
   ) %>%
-  mutate(federal_state = NAME_1) %>%
-  # Drop geometry to return to a regular (non-spatial) data frame
   st_drop_geometry() %>%
-  select(RID, federal_state)
+  select(RID, federal_state, county_name, municipality_name, town_name, ARS)
 
-# Safety check: Make sure there's no duplicated RID before joining
-stopifnot(!any(duplicated(conflicted_with_state$RID)))
+complete_data <- complete_data %>% left_join(admin_assignments, by = "RID")
 
-# Join spatial fallback into main dataset and update missing federal_state values
-complete_data <- complete_data %>%
-  left_join(conflicted_with_state, by = "RID", suffix = c("", "_spatial")) %>%
-  mutate(federal_state = coalesce(federal_state_spatial, federal_state)) %>%
-  select(-federal_state_spatial)
+# 20 observations without assignment: Border cases -> keep and find next closest?
+# Handle missing town_name by nearest polygon fallback
+missing_admin <- complete_data %>%
+  filter(is.na(town_name) & !is.na(lat) & !is.na(lon)) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
 
-rm(conflicted_with_state)
-rm(postal_file)
+if (nrow(missing_admin) > 0) {
+  nearest_idx <- st_nearest_feature(missing_admin, germany_admin)
+  nearest_fallback <- tibble(
+    RID = missing_admin$RID,
+    federal_state_nearest = germany_admin$NAME_1[nearest_idx],
+    county_name_nearest = germany_admin$NAME_2[nearest_idx],
+    municipality_name_nearest = germany_admin$NAME_3[nearest_idx],
+    town_name_nearest = germany_admin$NAME_4[nearest_idx],
+    ARS_nearest = germany_admin$CC_4[nearest_idx]
+  ) %>%
+    group_by(RID) %>%
+    slice(1) %>%
+    ungroup()
+  
+  complete_data <- complete_data %>%
+    left_join(nearest_fallback, by = "RID") %>%
+    mutate(
+      federal_state = coalesce(federal_state, federal_state_nearest),
+      county_name = coalesce(county_name, county_name_nearest),
+      municipality_name = coalesce(municipality_name, municipality_name_nearest),
+      town_name = coalesce(town_name, town_name_nearest),
+      ARS = coalesce(ARS, ARS_nearest)
+    ) %>%
+    select(-ends_with("_nearest"))
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+rm(admin_assignments, missing_admin, nearest_fallback, germany_admin)
