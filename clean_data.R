@@ -115,8 +115,33 @@ read_cov <- function(x) {
 
   # Read main dataset and process columns
   raw_data <- read_excel(x) %>%
-    rename(lat = latlng_wood_SQ_1_1, lon = latlng_wood_SQ_1_2,
-           lat_tc = latlng_wood_SQ2_1_1, lon_tc = latlng_wood_SQ2_1_2) %>%
+    rename(lat = latlng_wood_SQ_1_1, 
+           lon = latlng_wood_SQ_1_2,
+           lat_tc = latlng_wood_SQ2_1_1, 
+           lon_tc = latlng_wood_SQ2_1_2,
+           
+           # Renaming the specified columns
+           participation_consent = q1,
+           res_settlement_type = q2_1,
+           knowledge_hnv_share = q10,
+           knowledge_pa_effectiveness = q14,
+           estimated_hnv_near_residence = q16,
+           estimated_pa_near_residence = q18,
+           envisioned_levy_distribution = q27_2,
+
+           # Renaming the q27_1_1 to q27_1_11 columns for clarity
+           eval_time_taken = q27_1_1,
+           eval_survey_meaningful = q27_1_2,
+           eval_response_consistency = q27_1_3,
+           eval_conscientious_reading = q27_1_4,
+           eval_attention_check = q27_1_5,
+           eval_understanding_difficulty = q27_1_6,
+           eval_alt_distinction_difficulty = q27_1_7,
+           eval_cost_realism = q27_1_8,
+           eval_referendum_realism = q27_1_9,
+           eval_measures_effectiveness_belief = q27_1_10,
+           eval_policy_relevance_assumption = q27_1_11
+    ) %>%
     mutate(
       RID = as.numeric(RID),
       survey_round = gsub("_covariates.xlsx", "", basename(x)),
@@ -203,9 +228,9 @@ read_cov <- function(x) {
       
       # Recode urban vs rural category
       urban_rural = case_when(
-        q2_1 < 3 ~ "Village",
-        q2_1 < 5 ~ "Small City",
-        q2_1 < 7 ~ "Large City",
+        res_settlement_type < 3 ~ "Village",
+        res_settlement_type < 5 ~ "Small City",
+        res_settlement_type < 7 ~ "Large City",
         TRUE ~ NA_character_
       ),
       dogowner = case_when(
@@ -219,7 +244,7 @@ read_cov <- function(x) {
       minutes_spend = replace_na(as.numeric(minutes_spend), 0),
       time_spend_tc = hours_spend * 60 + minutes_spend,
       zoom_first_cc = case_when(getZoom1 > 0 ~ 1, TRUE~0),
-      payment_distribution = case_when(q27_2 == 1 ~ "Progressive", q27_2 == 2 ~ "Nobody pays", q27_2 == 3 ~ "Equal", q27_2 == 4 ~"Not thought about it"),
+      payment_distribution = case_when(envisioned_levy_distribution == 1 ~ "Progressive", envisioned_levy_distribution == 2 ~ "Nobody pays", envisioned_levy_distribution == 3 ~ "Equal", envisioned_levy_distribution == 4 ~"Not thought about it"),
       payment_vision = if ("q1171" %in% names(.)) {
         case_when(
           q1171 == 1 ~ "Every household the same",
@@ -337,7 +362,6 @@ read_cov <- function(x) {
                                (nr6_1 + nr6_2 + nr6_3 + nr6_4 + nr6_5 + nr6_6) / 6, 
                                NA),
       
-      
       # Convert character variables to appropriate types
       across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
       across(any_of(c("lat","lon","birthyralt_other","natvisit_company","forest_size", "natvisit_next12m", "false_zip", "allocationa_0630", "allocationb_0630", "slope_0630", "to_a_max_0630",
@@ -354,9 +378,6 @@ raw_data <- list.files("data", full.names = TRUE, recursive = TRUE, pattern = "c
   map(read_cov)
 
 
-
-
-
 all_data <- bind_rows(raw_data, .id = "survey_round")
 
 survey_round_map <- all_data %>%
@@ -368,7 +389,11 @@ survey_round_map <- all_data %>%
 all_data <-all_data %>%
   mutate(RID_unique = survey_round_map[survey_round] + RID) %>% 
   arrange(RID_unique) %>% 
-  rename(RID_sample = RID, RID=RID_unique)
+  rename(RID_sample = RID, RID=RID_unique,
+         preferred_levy_distribution = q1171,
+                  visited_nature_last12m = tc1,
+                  natvisit_last12m_estimation_basis = nv_2a,
+                  natvisit_fav_estimation_basis = nv_4a)
 
 all_data_complete <- all_data %>% 
   filter(STATUS_recoded == "Complete")
@@ -377,14 +402,14 @@ median_dur <- median(all_data_complete$DURATION)
 
 database <- all_data %>% 
   filter(STATUS_recoded == "Complete") %>% filter(DURATION >= 1/3*median_dur,
-                                                  q27_1_5 == 4)
+                                                  eval_attention_check == 4)
 
 all_data <- all_data %>%   distinct(RID,.keep_all=TRUE)
 
 complete_data <- database %>% 
   distinct(RID,.keep_all=TRUE) %>% 
   filter(STATUS_recoded == "Complete") %>% filter(DURATION >= 1/3*median_dur,
-                                                  q27_1_5 == 4)
+                                                  eval_attention_check == 4)
 
 rm(read_cov, survey_round_map, all_data_complete)
 
@@ -445,3 +470,29 @@ if (nrow(missing_admin) > 0) {
 }
 
 rm(admin_assignments, missing_admin, nearest_fallback, germany_admin)
+
+# # List of renamed variables (Aug 06) - lookup
+# participation_consent = q1,
+# res_settlement_type = q2_1,
+# knowledge_hnv_share = q10,
+# knowledge_pa_effectiveness = q14,
+# estimated_hnv_near_residence = q16,
+# estimated_pa_near_residence = q18,
+# envisioned_levy_distribution = q27_2,
+# preferred_levy_distribution = q1171,
+# visited_nature_last12m = tc1,
+# natvisit_last12m_estimation_basis = nv_2a,
+# natvisit_fav_estimation_basis = nv_4a,
+# most_visited_nature_type = q91test_group,
+# 
+# eval_time_taken = q27_1_1,
+# eval_survey_meaningful = q27_1_2,
+# eval_response_consistency = q27_1_3,
+# eval_conscientious_reading = q27_1_4,
+# eval_attention_check = q27_1_5,
+# eval_understanding_difficulty = q27_1_6,
+# eval_alt_distinction_difficulty = q27_1_7,
+# eval_cost_realism = q27_1_8,
+# eval_referendum_realism = q27_1_9,
+# eval_measures_effectiveness_belief = q27_1_10,
+# eval_policy_relevance_assumption = q27_1_11
