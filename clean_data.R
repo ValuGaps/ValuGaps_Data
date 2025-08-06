@@ -169,10 +169,10 @@ read_cov <- function(x) {
       
       # recode househole income
             hhnetinc_recode = factor(hhnetinc, levels = c('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'),
-                               labels = c('weniger als 500 Euro', '500 - 999 Euro', '1000 - 1499 Euro',
+                               labels = c('less than 500 Euro', '500 - 999 Euro', '1000 - 1499 Euro',
                                           '1500 - 1999 Euro', '2000 - 2499 Euro', '2500 - 2999 Euro',
                                           '3000 - 3499 Euro', '3500 - 3999 Euro', '4000 - 4999 Euro',
-                                          'mehr als 5000 Euro', 'k.A.')),
+                                          'more than 5000 Euro', 'k.A.')),
       hhnetinc_numeric = case_when(
         hhnetinc == '1' ~ 250,
         hhnetinc == '2' ~ 750,
