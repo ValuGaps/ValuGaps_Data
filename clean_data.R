@@ -228,8 +228,8 @@ read_cov <- function(x) {
       
       # Recode urban vs rural category
       urban_rural = case_when(
-        res_settlement_type < 3 ~ "Village",
-        res_settlement_type < 5 ~ "Small City",
+        res_settlement_type < 3 ~ "Small City",
+        res_settlement_type < 5 ~ "Medium-size City",
         res_settlement_type < 7 ~ "Large City",
         TRUE ~ NA_character_
       ),
