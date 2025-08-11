@@ -128,6 +128,17 @@ read_cov <- function(x) {
            estimated_hnv_near_residence = q16,
            estimated_pa_near_residence = q18,
            envisioned_levy_distribution = q27_2,
+           
+           # q91test_1 to q91test_9 renamed to most_visited_nature_type_x
+           most_visited_nature_type_mountain = q91test_1,
+           most_visited_nature_type_grassland = q91test_2,
+           most_visited_nature_type_agriculture = q91test_3,
+           most_visited_nature_type_urbanpark = q91test_4,
+           most_visited_nature_type_forest = q91test_5,
+           most_visited_nature_type_lake = q91test_6,
+           most_visited_nature_type_coastal = q91test_7,
+           most_visited_nature_type_other = q91test_8,
+           most_visited_nature_type_unknown = q91test_9,
 
            # Renaming the q27_1_1 to q27_1_11 columns for clarity
            eval_time_taken = q27_1_1,
@@ -483,8 +494,17 @@ rm(admin_assignments, missing_admin, nearest_fallback, germany_admin)
 # visited_nature_last12m = tc1,
 # natvisit_last12m_estimation_basis = nv_2a,
 # natvisit_fav_estimation_basis = nv_4a,
-# most_visited_nature_type = q91test_group,
 # 
+# most_visited_nature_type_mountain = q91test_1,
+# most_visited_nature_type_grassland = q91test_2,
+# most_visited_nature_type_agriculture = q91test_3,
+# most_visited_nature_type_urbanpark = q91test_4,
+# most_visited_nature_type_forest = q91test_5,
+# most_visited_nature_type_lake = q91test_6,
+# most_visited_nature_type_coastal = q91test_7,
+# most_visited_nature_type_other = q91test_8,
+# most_visited_nature_type_unknown = q91test_9,
+#
 # eval_time_taken = q27_1_1,
 # eval_survey_meaningful = q27_1_2,
 # eval_response_consistency = q27_1_3,
