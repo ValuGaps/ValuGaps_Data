@@ -448,8 +448,18 @@ admin_assignments <- complete_data %>%
 
 complete_data <- complete_data %>% left_join(admin_assignments, by = "RID")
 
-# 20 observations without assignment: Border cases -> keep and find next closest?
-# Handle missing town_name by nearest polygon fallback
+
+## Exclusion criterion: Residence inside of Germany
+#Keeping these observations that are wrongly to be outside of Germany - leaflet-check in geolocations.R
+keep_rids <- c("723352", "509461", "505487", "724953")
+
+# Filter the dataset
+complete_data <- complete_data %>%
+  filter(
+    ( !is.na(lat) & !is.na(lon) & !is.na(federal_state) ) | RID %in% keep_rids
+  )
+
+# Handle missing by nearest polygon fallback
 missing_admin <- complete_data %>%
   filter(is.na(town_name) & !is.na(lat) & !is.na(lon)) %>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326)
@@ -467,7 +477,7 @@ if (nrow(missing_admin) > 0) {
     group_by(RID) %>%
     slice(1) %>%
     ungroup()
-  
+
   complete_data <- complete_data %>%
     left_join(nearest_fallback, by = "RID") %>%
     mutate(
