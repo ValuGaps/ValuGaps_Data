@@ -35,11 +35,26 @@ if (!dir.exists("secondary_data/PLZ_data")) {
   csv_url <- "https://public.opendatasoft.com/explore/dataset/georef-germany-postleitzahl/download/?format=csv&timezone=Europe/Berlin&lang=en"
   destfile <- "secondary_data/PLZ_data/georef-germany-postleitzahl.csv"
   
-  cat("ZIP data not found. Downloading...\n")
+  cat("Downloading PLZ csv file...\n")
   download.file(csv_url, destfile, mode = "wb")
 }
 
 
+## intermediate results
+
+### only germany aggreated WTP (small)
+
+if (!dir.exists("intermediate_data/aggregation")) {
+  dir.create("intermediate_data/aggregation", recursive = TRUE)
+  
+  agg_url <- "https://osf.io/download/68c2e47ed4b52bccb1d65d4a/?view_only=321a19cb246b40a487002eaad027f83a"
+  destfile <- "intermediate_data/aggregation/germanykm_agg.rds"
+  
+  cat("Downloading aggregation file...\n")
+  download.file(agg_url, destfile, mode = "wb")
+}
+  
+  
 
 ## model results
 

@@ -31,7 +31,14 @@ osf_retrieve_node("e2zvy")  %>%
   osf_upload(path = list.files(path = "secondary_data/germany_shapefiles", full.names = TRUE, recursive = T ),recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "skip")
 
 
-  
+
+## for intermediate results e.g. for aggregation
+
+files_int <- list.files(path ="intermediate_data/", full.names = TRUE)
+
+osf_retrieve_node("pax8y")  %>%
+  osf_mkdir("aggregation") %>% 
+  osf_upload(path = files_int ,  progress = TRUE, verbose = TRUE, conflicts = "replace") 
 
 
 ## for all estimated models as RDS files.
