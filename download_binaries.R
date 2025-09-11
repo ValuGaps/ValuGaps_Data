@@ -1,5 +1,8 @@
 ### You can run this script if you want to download the data, secondary gis data, and model results.
 
+
+options(timeout = 600) 
+
 #to easily download and extract the files, you can use the package cloudR
 
 if(!require("cloudR")) {
