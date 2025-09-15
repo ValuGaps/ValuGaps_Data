@@ -55,7 +55,7 @@ osf_retrieve_node("4zu7w")  %>%
 
 ## conditional logit
 
-filescl <- list.files(path = "Results/Clogit/WTP space/", full.names = T)
+filescl <- list.files(path = "Results/Clogit/WTP_space/", full.names = T)
 filtered_filescl <- filescl[!grepl("old", filescl, ignore.case = TRUE) & grepl("\\.rds$", filescl, ignore.case = TRUE) ]
 
 
