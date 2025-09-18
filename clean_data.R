@@ -427,52 +427,148 @@ rm(read_cov, survey_round_map, all_data_complete)
 
 
 
+##### Combining with secondary data to review if exclusion criterion "residence in Germany" applies
 
-# Assign administrative names by spatial join - based on lat,lon
+# A: Creating a correct shapefile with all municipalities of Germany
+# Load incomplete/erroneous Germany admin shapefile
 germany_admin <- read_sf("secondary_data/germany_shapefiles/", "gadm41_DEU_4") %>%
-  select(NAME_1, NAME_2, NAME_3, NAME_4, CC_4)
+  select(NAME_1, NAME_2, NAME_3, NAME_4, CC_4) %>%
+  st_transform(4326)
 
-admin_assignments <- complete_data %>%
+# Load data to fill the gap in germany_admin
+## 1. Manual list of ARS codes of missing SH municipalities - identified via cross-checking germany_admin map and Geoportal + ARS-Tool
+ars_codes <- c(
+  "010595990164","010595990148","010595990112","010595990121",
+  "010595990142","010595990147","010595990152","010595990136",
+  "010590045045","010595990154"
+)
+
+## 2. Load the belonging indications (State District Municipality) from ALKIS
+sh_alkis <- read_sf("secondary_data/ALKIS/", "KommunalesGebiet_Gemeinden_ALKIS") %>%
+  select(SCHLGMD, LAND, KREIS, AMT) %>%
+  mutate(AMT = str_remove(AMT, "^Amt\\s+|^amtsfreie Gemeinde\\s+")) %>%
+  st_set_geometry(NULL)
+
+## 3. Load the belonging polygons for the missing municipalities from Geoportal
+geoportal_sf <- read_sf("secondary_data/vg250_gem/", "vg250_gem") %>%
+  filter(ars %in% ars_codes & !grepl("^DEBKGVG2000008I", objid)) %>%
+  st_transform(4326)
+
+# Prepare updated/replacement polygons
+to_replace <- germany_admin %>%
+  filter(CC_4 %in% geoportal_sf$ars) %>%
+  st_set_geometry(NULL) %>%
+  left_join(geoportal_sf %>% select(CC_4 = ars, geometry), by = "CC_4") %>%
+  st_as_sf()
+
+# New entries from Geoportal not in germany_admin
+new_entries <- geoportal_sf %>%
+  filter(!ars %in% germany_admin$CC_4) %>%
+  rename(CC_4 = ars) %>%
+  mutate(AGS_4 = sub("^(.{5}).{4}(.{3})$", "\\1\\2", CC_4)) %>%
+  left_join(sh_alkis, by = c("AGS_4" = "SCHLGMD")) %>%
+  transmute(NAME_1 = LAND, NAME_2 = KREIS, NAME_3 = AMT, NAME_4 = gen, CC_4, geometry) %>%
+  distinct() %>%
+  st_as_sf()
+
+# Combine kept, replaced, and new polygons
+germany_admin_corrected <- bind_rows(
+  germany_admin %>% filter(!CC_4 %in% geoportal_sf$ars),
+  to_replace,
+  new_entries
+)
+
+# Clean up
+rm(germany_admin, geoportal_sf, sh_alkis, to_replace, new_entries)
+
+
+# B: Assign administrative names to all observations of complete_data by spatial join - based on lat,lon
+
+# Prepare points: Keeping all observations with geolocation of residence
+points_sf <- complete_data %>%
   filter(!is.na(lat), !is.na(lon)) %>%
-  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-  st_join(germany_admin, left = FALSE) %>%
-  rename(
-    federal_state = NAME_1,
-    county_name = NAME_2,
-    municipality_name = NAME_3,
-    town_name = NAME_4,
-    ARS = CC_4
-  ) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+# Keep only relevant polygon columns for join
+admin_sf <- germany_admin_corrected %>%
+  select(CC_4, NAME_1, NAME_2, NAME_3, NAME_4)
+
+# Spatial join: points inside polygons
+admin_assignments <- st_join(points_sf, admin_sf, join = st_within, left = FALSE) %>%
   st_drop_geometry() %>%
+  rename(
+    federal_state   = NAME_1,
+    county_name     = NAME_2,
+    municipality_name = NAME_3,
+    town_name       = NAME_4,
+    ARS             = CC_4
+  ) %>%
   select(RID, federal_state, county_name, municipality_name, town_name, ARS)
 
 complete_data <- complete_data %>% left_join(admin_assignments, by = "RID")
 
-
 ## Exclusion criterion: Residence inside of Germany
-#Keeping these observations that are wrongly to be outside of Germany - leaflet-check in geolocations.R
-keep_rids <- c("723352", "509461", "505487", "724953")
+#Keeping these observations that are wrongly assigned as situated outside of Germany - leaflet-check hereafter
+#revise unmatched
+# unmatched_points <- complete_data %>%
+#   filter(!RID %in% admin_assignments$RID & !is.na(lon) & !is.na(lat)) %>%
+#   st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = FALSE)  # keep lon/lat columns
+# 
+# leaflet() %>%
+#   addProviderTiles(providers$CartoDB.Positron) %>%
+#   
+#   # Add Germany polygons
+#   addPolygons(
+#     data = germany_admin_corrected,
+#     color = "#2E8B57",
+#     weight = 2,
+#     opacity = 0.5,
+#     fillOpacity = 0,
+#     label = ~paste(NAME_1, NAME_2, NAME_3, NAME_4, sep = ", ")
+#   ) %>%
+#   
+#   # Highlight unmatched points
+#   addCircleMarkers(
+#     data = unmatched_points,
+#     radius = 6,
+#     color = "red",
+#     fillOpacity = 0.8,
+#     label = ~paste0("RID: ", RID, "<br>",
+#                     "Lat: ", round(lat, 5), "<br>",
+#                     "Lon: ", round(lon, 5))
+#   ) %>%
+#   
+#   # Legend
+#   addLegend(
+#     position = "bottomright",
+#     colors = c("#2E8B57", "red"),
+#     labels = c("Germany admin boundaries", "Unmatched points"),
+#     title = "Map layers"
+#   )
 
 # Filter the dataset
+# Unmatched observations do not have a point of residence inside the administrative borders of Germany - manual review on the map reveals that these three picked a place near the German coast and are hence to be kept
+# The rest of observations are getting ejected as they do not meet the inclusion criteria
+keep_rids <- c("509461", "505487", "724953")
 complete_data <- complete_data %>%
   filter(
     ( !is.na(lat) & !is.na(lon) & !is.na(federal_state) ) | RID %in% keep_rids
   )
 
-# Handle missing by nearest polygon fallback
+# For the keep_rids we assign the ARS currently missing by nearest polygon fallback
 missing_admin <- complete_data %>%
   filter(is.na(town_name) & !is.na(lat) & !is.na(lon)) %>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326)
 
 if (nrow(missing_admin) > 0) {
-  nearest_idx <- st_nearest_feature(missing_admin, germany_admin)
+  nearest_idx <- st_nearest_feature(missing_admin, germany_admin_corrected)
   nearest_fallback <- tibble(
     RID = missing_admin$RID,
-    federal_state_nearest = germany_admin$NAME_1[nearest_idx],
-    county_name_nearest = germany_admin$NAME_2[nearest_idx],
-    municipality_name_nearest = germany_admin$NAME_3[nearest_idx],
-    town_name_nearest = germany_admin$NAME_4[nearest_idx],
-    ARS_nearest = germany_admin$CC_4[nearest_idx]
+    federal_state_nearest = germany_admin_corrected$NAME_1[nearest_idx],
+    county_name_nearest = germany_admin_corrected$NAME_2[nearest_idx],
+    municipality_name_nearest = germany_admin_corrected$NAME_3[nearest_idx],
+    town_name_nearest = germany_admin_corrected$NAME_4[nearest_idx],
+    ARS_nearest = germany_admin_corrected$CC_4[nearest_idx]
   ) %>%
     group_by(RID) %>%
     slice(1) %>%
@@ -490,7 +586,7 @@ if (nrow(missing_admin) > 0) {
     select(-ends_with("_nearest"))
 }
 
-rm(admin_assignments, missing_admin, nearest_fallback, germany_admin)
+rm(admin_assignments, missing_admin, nearest_fallback, germany_admin_corrected, points_sf, admin_sf)
 
 # # List of renamed variables (Aug 06) - lookup
 # participation_consent = q1,
