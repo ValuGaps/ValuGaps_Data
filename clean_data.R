@@ -588,6 +588,17 @@ if (nrow(missing_admin) > 0) {
 
 rm(admin_assignments, missing_admin, nearest_fallback, germany_admin_corrected, points_sf, admin_sf)
 
+
+
+  dir.create("finaldata", showWarnings = FALSE) 
+
+
+save(complete_data, all_data, database, file = "finaldata/all_datasets.RData")
+
+library(osfr)
+osf_retrieve_node("g7eac")  %>%
+    osf_upload(path = "finaldata/all_datasets.RData",recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "skip")
+
 # # List of renamed variables (Aug 06) - lookup
 # participation_consent = q1,
 # res_settlement_type = q2_1,

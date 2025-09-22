@@ -7,3 +7,7 @@
 ValuGaps_Data.Rproj
 *.Rproj
 data/
+Results/
+finaldata/
+intermediate_data/
+secondary_data/

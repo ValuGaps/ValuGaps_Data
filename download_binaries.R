@@ -27,9 +27,32 @@ cloudR::download_and_extract_zip(url = shapefiles ,dest_folder = "secondary_data
 ## census data
 if(!dir.exists("secondary_data/census")) {
   dir.create("secondary_data/census" ,recursive = T)
+  
+  cat("Downloading census data...\n")
   cloudR::download_and_extract_zip("https://files.de-1.osf.io/v1/resources/e2zvy/providers/osfstorage/682dd4be76df44ca46b06cdd/?view_only=f08b8c286f7a49279b5e472826c9090c&zip=", zip_name = "census.zip", dest_folder = "secondary_data/census/old")
 }
 
+
+## Alkis data
+
+if(!dir.exists("secondary_data/ALKIS")) {
+  dir.create("secondary_data/ALKIS" ,recursive = T)
+  
+  cat("Downloading ALKIS...\n")
+  
+  cloudR::download_and_extract_zip("https://files.de-1.osf.io/v1/resources/e2zvy/providers/osfstorage/68c2d640ffce999ac0a6c1bc/?view_only=f08b8c286f7a49279b5e472826c9090c&zip=", zip_name = "alkis.zip", dest_folder = "secondary_data/ALKIS/old")
+}
+
+
+## vg250gem
+
+if(!dir.exists("secondary_data/vg250_gem/")) {
+  dir.create("secondary_data/vg250_gem/" ,recursive = T)
+  
+  cat("Downloading vg250_gem...\n")
+  
+  cloudR::download_and_extract_zip("https://files.de-1.osf.io/v1/resources/e2zvy/providers/osfstorage/68c2d65273f5eb91955d8180/?view_only=f08b8c286f7a49279b5e472826c9090c&zip=", zip_name = "alkis.zip", dest_folder = "secondary_data/vg250_gem/old")
+}
 
 ## ZIP data
 if (!dir.exists("secondary_data/PLZ_data")) {
@@ -65,3 +88,10 @@ modelfiles <- "https://files.de-1.osf.io/v1/resources/4zu7w/providers/osfstorage
 
 
 cloudR::download_and_extract_zip(url = modelfiles ,dest_folder = "Results/old" , zip_name = "results.zip")
+
+
+
+# final data 1gb
+
+dir.create("finaldata", showWarnings = FALSE)
+download.file("https://osf.io/download/68d11b2611b72e9f4f74e860/?view_only=25375f7fb6c84c92818b5b0f7d0c01e2", destfile = "finaldata/all_datasets.RData", mode = "wb")
