@@ -397,8 +397,9 @@ survey_round_map <- all_data %>%
   deframe()
 
 # Generate `RID_unique`
-all_data <-all_data %>%
+all_data <- all_data %>%
   mutate(RID_unique = survey_round_map[survey_round] + RID) %>% 
+  select(-RID_sample) %>%
   arrange(RID_unique) %>% 
   rename(RID_sample = RID, RID=RID_unique,
          preferred_levy_distribution = q1171,
@@ -524,7 +525,7 @@ dir.create("finaldata", showWarnings = FALSE)
     version = 3                   # modern serialization
   )
 
-library(osfr)
-osf_retrieve_node("g7eac")  %>%
-    osf_upload(path = "finaldata/all_datasets.RData",recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "override")
+# library(osfr)
+# osf_retrieve_node("g7eac")  %>%
+#     osf_upload(path = "finaldata/all_datasets.RData",recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "override")
 
