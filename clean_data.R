@@ -507,129 +507,24 @@ admin_assignments <- st_join(points_sf, admin_sf, join = st_within, left = FALSE
 
 complete_data <- complete_data %>% left_join(admin_assignments, by = "RID")
 
-## Exclusion criterion: Residence inside of Germany
-#Keeping these observations that are wrongly assigned as situated outside of Germany - leaflet-check hereafter
-#revise unmatched
-# unmatched_points <- complete_data %>%
-#   filter(!RID %in% admin_assignments$RID & !is.na(lon) & !is.na(lat)) %>%
-#   st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = FALSE)  # keep lon/lat columns
-# 
-# leaflet() %>%
-#   addProviderTiles(providers$CartoDB.Positron) %>%
-#   
-#   # Add Germany polygons
-#   addPolygons(
-#     data = germany_admin_corrected,
-#     color = "#2E8B57",
-#     weight = 2,
-#     opacity = 0.5,
-#     fillOpacity = 0,
-#     label = ~paste(NAME_1, NAME_2, NAME_3, NAME_4, sep = ", ")
-#   ) %>%
-#   
-#   # Highlight unmatched points
-#   addCircleMarkers(
-#     data = unmatched_points,
-#     radius = 6,
-#     color = "red",
-#     fillOpacity = 0.8,
-#     label = ~paste0("RID: ", RID, "<br>",
-#                     "Lat: ", round(lat, 5), "<br>",
-#                     "Lon: ", round(lon, 5))
-#   ) %>%
-#   
-#   # Legend
-#   addLegend(
-#     position = "bottomright",
-#     colors = c("#2E8B57", "red"),
-#     labels = c("Germany admin boundaries", "Unmatched points"),
-#     title = "Map layers"
-#   )
 
-# Filter the dataset
-# Unmatched observations do not have a point of residence inside the administrative borders of Germany - manual review on the map reveals that these three picked a place near the German coast and are hence to be kept
-# The rest of observations are getting ejected as they do not meet the inclusion criteria
-keep_rids <- c("509461", "505487", "724953")
-complete_data <- complete_data %>%
-  filter(
-    ( !is.na(lat) & !is.na(lon) & !is.na(federal_state) ) | RID %in% keep_rids
+
+
+
+## save and upload data
+
+dir.create("finaldata", showWarnings = FALSE) 
+
+
+  save(
+    complete_data, all_data, database,
+    file = "finaldata/all_datasets.RData",
+    compress = "gzip",              # strongest compression
+    compression_level = 9,        # highest level (slowest, but smallest)
+    version = 3                   # modern serialization
   )
-
-# For the keep_rids we assign the ARS currently missing by nearest polygon fallback
-missing_admin <- complete_data %>%
-  filter(is.na(town_name) & !is.na(lat) & !is.na(lon)) %>%
-  st_as_sf(coords = c("lon", "lat"), crs = 4326)
-
-if (nrow(missing_admin) > 0) {
-  nearest_idx <- st_nearest_feature(missing_admin, germany_admin_corrected)
-  nearest_fallback <- tibble(
-    RID = missing_admin$RID,
-    federal_state_nearest = germany_admin_corrected$NAME_1[nearest_idx],
-    county_name_nearest = germany_admin_corrected$NAME_2[nearest_idx],
-    municipality_name_nearest = germany_admin_corrected$NAME_3[nearest_idx],
-    town_name_nearest = germany_admin_corrected$NAME_4[nearest_idx],
-    ARS_nearest = germany_admin_corrected$CC_4[nearest_idx]
-  ) %>%
-    group_by(RID) %>%
-    slice(1) %>%
-    ungroup()
-
-  complete_data <- complete_data %>%
-    left_join(nearest_fallback, by = "RID") %>%
-    mutate(
-      federal_state = coalesce(federal_state, federal_state_nearest),
-      county_name = coalesce(county_name, county_name_nearest),
-      municipality_name = coalesce(municipality_name, municipality_name_nearest),
-      town_name = coalesce(town_name, town_name_nearest),
-      ARS = coalesce(ARS, ARS_nearest)
-    ) %>%
-    select(-ends_with("_nearest"))
-}
-
-rm(admin_assignments, missing_admin, nearest_fallback, germany_admin_corrected, points_sf, admin_sf)
-
-
-
-  dir.create("finaldata", showWarnings = FALSE) 
-
-
-save(complete_data, all_data, database, file = "finaldata/all_datasets.RData")
 
 library(osfr)
 osf_retrieve_node("g7eac")  %>%
-    osf_upload(path = "finaldata/all_datasets.RData",recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "skip")
+    osf_upload(path = "finaldata/all_datasets.RData",recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "override")
 
-# # List of renamed variables (Aug 06) - lookup
-# participation_consent = q1,
-# res_settlement_type = q2_1,
-# knowledge_hnv_share = q10,
-# knowledge_pa_effectiveness = q14,
-# estimated_hnv_near_residence = q16,
-# estimated_pa_near_residence = q18,
-# envisioned_levy_distribution = q27_2,
-# preferred_levy_distribution = q1171,
-# visited_nature_last12m = tc1,
-# natvisit_last12m_estimation_basis = nv_2a,
-# natvisit_fav_estimation_basis = nv_4a,
-# 
-# most_visited_nature_type_mountain = q91test_1,
-# most_visited_nature_type_grassland = q91test_2,
-# most_visited_nature_type_agriculture = q91test_3,
-# most_visited_nature_type_urbanpark = q91test_4,
-# most_visited_nature_type_forest = q91test_5,
-# most_visited_nature_type_lake = q91test_6,
-# most_visited_nature_type_coastal = q91test_7,
-# most_visited_nature_type_other = q91test_8,
-# most_visited_nature_type_unknown = q91test_9,
-#
-# eval_time_taken = q27_1_1,
-# eval_survey_meaningful = q27_1_2,
-# eval_response_consistency = q27_1_3,
-# eval_conscientious_reading = q27_1_4,
-# eval_attention_check = q27_1_5,
-# eval_understanding_difficulty = q27_1_6,
-# eval_alt_distinction_difficulty = q27_1_7,
-# eval_cost_realism = q27_1_8,
-# eval_referendum_realism = q27_1_9,
-# eval_measures_effectiveness_belief = q27_1_10,
-# eval_policy_relevance_assumption = q27_1_11
