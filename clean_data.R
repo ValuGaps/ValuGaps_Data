@@ -55,7 +55,44 @@ library(sf)
 ###### Readin all covariate files  ##### 
 
 
+rename_map <- c(
+  "q1" = "participation_consent",
+  "q2_1" = "res_settlement_type",
+  "q10" = "knowledge_hnv_share",
+  "q12" = "knowledge_hnv_characteristic",
+  "q14" = "knowledge_pa_effectiveness",
+  "q16" = "estimated_hnv_near_residence",
+  "q18" = "estimated_pa_near_residence",
+  "q27_2" = "envisioned_levy_distribution",
+  "q91test_1" = "most_visited_nature_type_mountain",
+  "q91test_2" = "most_visited_nature_type_grassland",
+  "q91test_3" = "most_visited_nature_type_agriculture",
+  "q91test_4" = "most_visited_nature_type_urbanpark",
+  "q91test_5" = "most_visited_nature_type_forest",
+  "q91test_6" = "most_visited_nature_type_lake",
+  "q91test_7" = "most_visited_nature_type_coastal",
+  "q91test_8" = "most_visited_nature_type_other",
+  "q91test_9" = "most_visited_nature_type_unknown",
+  "q91test_other" = "most_visited_nature_type_otheranswer",
+  "q91test_RAND" = "most_visited_nature_type_RAND",
+  
+  "q27_1_1" = "eval_time_taken",
+  "q27_1_2" = "eval_survey_meaningful",
+  "q27_1_3" = "eval_response_consistency",
+  "q27_1_4" = "eval_conscientious_reading",
+  "q27_1_5" = "eval_attention_check",
+  "q27_1_6" = "eval_understanding_difficulty",
+  "q27_1_7" = "eval_alt_distinction_difficulty",
+  "q27_1_8" = "eval_cost_realism",
+  "q27_1_9" = "eval_referendum_realism",
+  "q27_1_10" = "eval_measures_effectiveness_belief",
+  "q27_1_11" = "eval_policy_relevance_assumption",
 
+  "q1171" = "preferred_levy_distribution",
+  "tc1" = "visited_nature_last12m",
+  "nv_2a" = "natvisit_last12m_estimation_basis",
+  "nv_4a" = "natvisit_fav_estimation_basis"
+)
 
 
 read_cov <- function(x) {
@@ -115,43 +152,13 @@ read_cov <- function(x) {
 
   # Read main dataset and process columns
   raw_data <- read_excel(x) %>%
-    rename(lat = latlng_wood_SQ_1_1, 
-           lon = latlng_wood_SQ_1_2,
-           lat_tc = latlng_wood_SQ2_1_1, 
-           lon_tc = latlng_wood_SQ2_1_2,
-           
-           # Renaming the specified columns
-           participation_consent = q1,
-           res_settlement_type = q2_1,
-           knowledge_hnv_share = q10,
-           knowledge_pa_effectiveness = q14,
-           estimated_hnv_near_residence = q16,
-           estimated_pa_near_residence = q18,
-           envisioned_levy_distribution = q27_2,
-           
-           # q91test_1 to q91test_9 renamed to most_visited_nature_type_x
-           most_visited_nature_type_mountain = q91test_1,
-           most_visited_nature_type_grassland = q91test_2,
-           most_visited_nature_type_agriculture = q91test_3,
-           most_visited_nature_type_urbanpark = q91test_4,
-           most_visited_nature_type_forest = q91test_5,
-           most_visited_nature_type_lake = q91test_6,
-           most_visited_nature_type_coastal = q91test_7,
-           most_visited_nature_type_other = q91test_8,
-           most_visited_nature_type_unknown = q91test_9,
-
-           # Renaming the q27_1_1 to q27_1_11 columns for clarity
-           eval_time_taken = q27_1_1,
-           eval_survey_meaningful = q27_1_2,
-           eval_response_consistency = q27_1_3,
-           eval_conscientious_reading = q27_1_4,
-           eval_attention_check = q27_1_5,
-           eval_understanding_difficulty = q27_1_6,
-           eval_alt_distinction_difficulty = q27_1_7,
-           eval_cost_realism = q27_1_8,
-           eval_referendum_realism = q27_1_9,
-           eval_measures_effectiveness_belief = q27_1_10,
-           eval_policy_relevance_assumption = q27_1_11
+    rename(
+      lat = latlng_wood_SQ_1_1,
+      lon = latlng_wood_SQ_1_2,
+      lat_tc = latlng_wood_SQ2_1_1,
+      lon_tc = latlng_wood_SQ2_1_2,
+      !!!setNames(rlang::syms(names(rename_map)[names(rename_map) %in% names(.)]),
+                  rename_map[names(rename_map) %in% names(.)])
     ) %>%
     mutate(
       RID = as.numeric(RID),
@@ -256,15 +263,15 @@ read_cov <- function(x) {
       time_spend_tc = hours_spend * 60 + minutes_spend,
       zoom_first_cc = case_when(getZoom1 > 0 ~ 1, TRUE~0),
       payment_distribution = case_when(envisioned_levy_distribution == 1 ~ "Progressive", envisioned_levy_distribution == 2 ~ "Nobody pays", envisioned_levy_distribution == 3 ~ "Equal", envisioned_levy_distribution == 4 ~"Not thought about it"),
-      payment_vision = if ("q1171" %in% names(.)) {
+      payment_vision = if ("preferred_levy_distribution" %in% names(.)) {
         case_when(
-          q1171 == 1 ~ "Every household the same",
-          q1171 == 2 ~ "Relative to their income tax",
-          q1171 == 3 ~ "Do not care about distribution",
-          q1171 == 4 ~ "Other"
+          preferred_levy_distribution == 1 ~ "Every household the same",
+          preferred_levy_distribution == 2 ~ "Relative to their income tax",
+          preferred_levy_distribution == 3 ~ "Do not care about distribution",
+          preferred_levy_distribution == 4 ~ "Other"
         )
       } else {
-        NA_character_  # Return NA if q1171 does not exist
+        NA_character_  # Return NA if preferred_levy_distribution does not exist
       },
       
       # Device-related classifications
@@ -379,6 +386,20 @@ read_cov <- function(x) {
                       "to_b_max_0630", "allocationa_0820", "allocationb_0820", "slope_0820" ,"to_a_max_0820", "to_b_max_0820", "hhsize", "postcode", "pref1")), as.numeric),
     )
   
+  #### need to fix it in a way that it avoids recognizing q12 as q1 2
+  for(old_rhs in names(rename_map)) {
+    new_base <- rename_map[[old_rhs]]
+    
+    # Match columns where old_rhs is the full name before the first underscore
+    cols_to_rename <- grep(paste0("^", old_rhs, "(_|$)"), names(raw_data), value = TRUE)
+    
+    for(col in cols_to_rename) {
+      # Replace only the matched old_rhs part with new_base
+      new_name <- sub(paste0("^", old_rhs), new_base, col)
+      names(raw_data)[names(raw_data) == col] <- new_name
+    }
+  }
+  
   return(raw_data)
 }
 
@@ -401,11 +422,7 @@ all_data <- all_data %>%
   mutate(RID_unique = survey_round_map[survey_round] + RID) %>% 
   select(-RID_sample) %>%
   arrange(RID_unique) %>% 
-  rename(RID_sample = RID, RID=RID_unique,
-         preferred_levy_distribution = q1171,
-                  visited_nature_last12m = tc1,
-                  natvisit_last12m_estimation_basis = nv_2a,
-                  natvisit_fav_estimation_basis = nv_4a)
+  rename(RID_sample = RID, RID=RID_unique)
 
 all_data_complete <- all_data %>% 
   filter(STATUS_recoded == "Complete")
@@ -508,7 +525,69 @@ admin_assignments <- st_join(points_sf, admin_sf, join = st_within, left = FALSE
 
 complete_data <- complete_data %>% left_join(admin_assignments, by = "RID")
 
+rm(admin_assignments, admin_sf, germany_admin_corrected, points_sf)
 
+
+### EJECTING OBSOLETE VARS ####
+
+vars_wo_relevance <- c(
+  "block", "design_offset", 
+  "dce_tasks", 
+  "lw", "lws", "av", "birthyralt_other", "tc1_alt",
+  "hnv1_miss", "hnv2_miss", "hnv3_miss", "hnv4_miss", "hnv5_miss", "hnv6_miss",
+  "hnv1_corr", "hnv2_corr", "hnv3_corr", "hnv4_corr", "hnv5_corr", "hnv6_corr",
+  "exit_code", "status_vars_group",
+  "hnv_miss_group", "hnv_corr_group"
+)
+
+vars_dce_group <- grep("^dce_[a-j]", names(all_data), value = TRUE)
+
+vars_obsolete_from_recode <- c(
+  "gender_chr", "gender_male",
+  "dce_version_base", "protest_recode",
+  "natvisit_monthly", "natvisit_weekly",
+  "natvisit_last12m_m", "natvisit_last12m_w",
+  "natvisit_fav_monthly", "natvisit_fav_weekly",
+  "natvisit_fav_m", "natvisit_fav_w",
+  "birthyear_uncleaned",
+  "lifesat", "lifesat_mobile",
+  "healthphys", "healthphys_mobile",
+  "healthpsych", "healthpsych_mobile",
+  "RID_sample", "total_pref1", "protester", "scope_dce",
+  "survey_round_pooled", "device", "pol_btw",
+  "devicetype",
+  "hhnetinc", "dogowner",
+  "payment_distribution", "payment_vision",
+  "a1_x_group", "a2_x_group",
+  "STATUS_recoded",
+  "urban_rural", "time_spend_tc", "zoom_first_cc", 
+  "dce_source",
+  "natvisit_recreation",
+  "attention_check_fail",
+  "hhnetinc_numeric"
+)
+
+#What about SCENARIO, SEQ, DESIGN_ROW
+
+all_vars_to_remove <- Reduce(union, list(
+  vars_wo_relevance, 
+  vars_obsolete_from_recode, 
+  vars_dce_group
+))
+
+# Define a helper function to safely remove variables
+remove_vars <- function(df, vars_to_remove) {
+  vars_existing <- intersect(names(df), vars_to_remove)
+  if (length(vars_existing) > 0) {
+    df <- df %>% select(-all_of(vars_existing))
+  }
+  return(df)
+}
+
+# Apply to all datasets
+all_data <- remove_vars(all_data, all_vars_to_remove)
+complete_data <- remove_vars(complete_data, all_vars_to_remove)
+database <- remove_vars(database, all_vars_to_remove)
 
 
 
