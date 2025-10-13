@@ -31,18 +31,24 @@ library(terra)
 # ------ READING IN XLSX files ---------------
 # Minimal read function
 read_cov_reduced <- function(x) {
-  read_excel(x) %>%
+  df <- read_excel(x)
+  anon_flag_present <- "anon_applied" %in% names(df)
+  
+  df %>%
     rename(
-      RID = RID,  # Ensure consistent naming
+      RID = RID,
       lat = latlng_wood_SQ_1_1,
       lon = latlng_wood_SQ_1_2
     ) %>%
     mutate(
       RID = as.numeric(RID),
+      survey_round = gsub("_covariates.xlsx", "", basename(x)),
       lat = as.numeric(lat),
-      lon = as.numeric(lon)
+      lon = as.numeric(lon),
+      anon_applied = if (anon_flag_present) as.logical(df$anon_applied) else FALSE,
+      anonymized_on = if (anon_flag_present && "anonymized_on" %in% names(df)) as.character(df$anonymized_on) else NA_character_
     ) %>%
-    select(RID, lat, lon)
+    select(RID, survey_round, lat, lon, anon_applied, anonymized_on)
 }
 
 # Apply to all covariate files
@@ -62,9 +68,7 @@ survey_round_map <- all_data_reduced %>%
 
 all_data_reduced <- all_data_reduced %>%
   mutate(RID_unique = survey_round_map[survey_round] + RID) %>%
-  rename(RID_sample = RID, RID = RID_unique) %>%
-  select(RID, RID_sample, survey_round, lat, lon)
-
+  rename(RID_sample = RID, RID = RID_unique)
 
 
 # # setwd("~/git_repos/DataPub")
@@ -79,6 +83,15 @@ all_data_reduced <- all_data_reduced %>%
 # load("finaldata/all_datasets.RData")
 
 
+# ---- Dataset-level protection ----
+if ("anon_applied" %in% names(all_data_reduced)) {
+  if (all(all_data_reduced$anon_applied, na.rm = TRUE)) {
+    stop("Dataset has already been anonymized. Aborting to prevent double anonymization.")
+  }
+  if (any(is.na(all_data_reduced$anon_applied))) {
+    warning("Some rows have missing 'anon_applied' values. For these, geolocations were either removed because of orginal datapoints residing outside of Germany, or non-existent in the data in the first place.")
+  }
+}
 
 
 
@@ -300,6 +313,7 @@ germany_grid <- census2022_popden %>%
   st_as_sf() %>%                  # convert to sf
   st_transform(crs = 4326)        # reproject
 
+rm(census_1x1km_csv,census2022_popden,censuskm_rast)
 
 
 
@@ -401,7 +415,11 @@ rm(germany_grid, geoportal_sf_fallback)
 
 # Duplicate main data, keeping only necessary columns
 anon_working_df <- all_data_reduced_GER %>%
-  select(RID, lat, lon, ARS, federal_state, Cell_popdensity)
+  select(RID, survey_round, lat, lon, ARS, federal_state, Cell_popdensity) %>%
+  mutate(
+    anon_applied = FALSE,
+    anonymized_on = NA_character_
+  )
 
 # Constants
 meters_per_degree_lat <- 111320
@@ -705,6 +723,11 @@ anon_working_df <- anon_working_df %>%
   overwrite_coords(round4_df) %>%
   overwrite_coords(loop_data)
 
+anon_working_df <- anon_working_df %>%
+  mutate(
+    anon_applied = TRUE,
+    anonymized_on = as.character(Sys.time())
+  )
 
 # === FINAL ARS CHECK (without overwriting ARS_mismatch) ===
 # Select only observations that were originally unmatched - i.e. required corrected anonymized geolocations
@@ -772,7 +795,7 @@ if(final_check_summary$n_disagree > 0){
 anon_working_df <- assign_admin(anon_working_df, germany_admin_corrected)
 table(anon_working_df$ARS_mismatch)
 
-# Succesful anonymization respecting the condition of maintaining the ARS
+# Successful anonymization respecting the condition of maintaining the ARS
 
 rm(list = ls(pattern = "^round"))
 rm(results, loop_data, final_check_summary, final_matched)
@@ -1232,7 +1255,7 @@ dir.create(save_folder, recursive = TRUE, showWarnings = FALSE)
 final_df <- all_data_reduced %>%
   select(RID, RID_sample, survey_round) %>%
   left_join(
-    anon_working_df %>% select(RID, lon_anon, lat_anon),
+    anon_working_df %>% select(RID, lon_anon, lat_anon, anon_applied, anonymized_on),
     by = "RID"
   )
 saveRDS(final_df,
@@ -1275,34 +1298,42 @@ update_excel_with_anon_backup <- function(file_path, anon_df, backup_folder) {
   
   # Read that sheet
   df <- read.xlsx(wb, sheet = sheet_name) %>%
-    mutate(RID_sample = as.numeric(RID))  # create a consistent join key
+    mutate(RID_sample = as.numeric(RID))  # consistent join key
   
-  # Extract survey_round from filename
+  # Check if already fully anonymized
+  if("anon_applied" %in% names(df) && all(df$anon_applied, na.rm = TRUE)) {
+    message("File already anonymized, skipping: ", basename(file_path))
+    return(df)
+  }
+  
   survey_round <- gsub("_covariates.xlsx", "", basename(file_path))
   
-  # Join anonymized coordinates
+  # Join anonymized coordinates + flags
   df_updated <- df %>%
     left_join(
       anon_df %>% filter(survey_round == !!survey_round) %>%
-        select(RID_sample, lat_anon, lon_anon),
+        select(RID_sample, lat_anon, lon_anon, anon_applied, anonymized_on),
       by = "RID_sample"
     ) %>%
     mutate(
-      latlng_wood_SQ_1_1 = lat_anon,   # directly assign, even if NA
-      latlng_wood_SQ_1_2 = lon_anon
+      latlng_wood_SQ_1_1 = lat_anon,
+      latlng_wood_SQ_1_2 = lon_anon,
+      anon_applied = coalesce(anon_applied.y, anon_applied.x, FALSE),
+      anonymized_on = coalesce(anonymized_on.y, anonymized_on.x)
     ) %>%
-    select(-lat_anon, -lon_anon)
+    select(-lat_anon, -lon_anon, -ends_with(".x"), -ends_with(".y"))
   
   # Write back to workbook
   writeData(wb, sheet = sheet_name, df_updated, withFilter = FALSE)
   saveWorkbook(wb, file_path, overwrite = TRUE)
   
-  return(df_updated)  # return the updated dataframe for verification
+  return(df_updated)
 }
 
 # Apply function
 updated_files <- map(covariate_files, update_excel_with_anon_backup,
                      anon_df = anon_df, backup_folder = backup_folder)
+
 
 
 
@@ -1802,26 +1833,26 @@ updated_files <- map(covariate_files, update_excel_with_anon_backup,
 #   # Base folders (relative to working directory)
 #   backup_dir <- "data_backup"
 #   data_dir   <- "data"
-#   
+# 
 #   # Check backup folder exists
 #   if (!dir.exists(backup_dir)) {
 #     stop(sprintf("Backup folder not found: '%s'. Run this script from the project root or adjust paths.", backup_dir))
 #   }
-#   
+# 
 #   results <- list()
-#   
+# 
 #   # 1) Main_i files (i = 1..7)
 #   for (i in seq_len(7)) {
 #     fname <- sprintf("Main_%d_covariates.xlsx", i)
 #     src <- file.path(backup_dir, fname)
 #     target <- file.path(data_dir, "main_study", sprintf("Main_%d", i), fname)
-#     
+# 
 #     if (!file.exists(src)) {
 #       results[[paste0("Main_", i)]] <- list(success = FALSE, src = src, dest = target, msg = "source_not_found")
 #       message(sprintf("[MISSING] %s (expected at %s)", fname, src))
 #       next
 #     }
-#     
+# 
 #     res <- copy_file_overwrite(src, target)
 #     if (res$success) {
 #       message(sprintf("[COPIED] %s -> %s", src, target))
@@ -1830,25 +1861,25 @@ updated_files <- map(covariate_files, update_excel_with_anon_backup,
 #     }
 #     results[[paste0("Main_", i)]] <- res
 #   }
-#   
+# 
 #   # 2) Pilot files
 #   pilots <- list(
 #     list(fname = "pilot_2.1_covariates.xlsx", target_dir = file.path(data_dir, "pilot", "Pilot_2.1")),
 #     list(fname = "pilot_3_covariates.xlsx",   target_dir = file.path(data_dir, "pilot", "Pilot_3")),
 #     list(fname = "pilot_4_covariates.xlsx",   target_dir = file.path(data_dir, "pilot", "Pilot_4"))
 #   )
-#   
+# 
 #   for (p in pilots) {
 #     src <- file.path(backup_dir, p$fname)
 #     target <- file.path(p$target_dir, p$fname)
 #     key <- paste0("pilot-", p$fname)
-#     
+# 
 #     if (!file.exists(src)) {
 #       results[[key]] <- list(success = FALSE, src = src, dest = target, msg = "source_not_found")
 #       message(sprintf("[MISSING] %s (expected at %s)", p$fname, src))
 #       next
 #     }
-#     
+# 
 #     res <- copy_file_overwrite(src, target)
 #     if (res$success) {
 #       message(sprintf("[COPIED] %s -> %s", src, target))
@@ -1857,7 +1888,7 @@ updated_files <- map(covariate_files, update_excel_with_anon_backup,
 #     }
 #     results[[key]] <- res
 #   }
-#   
+# 
 #   # Summary
 #   cat("\n=== SUMMARY ===\n")
 #   n_copied <- sum(vapply(results, function(x) is.list(x) && isTRUE(x$success), logical(1)))
@@ -1866,7 +1897,7 @@ updated_files <- map(covariate_files, update_excel_with_anon_backup,
 #   cat(sprintf("Total targets: %d\n", n_total))
 #   cat(sprintf("Successfully copied: %d\n", n_copied))
 #   cat(sprintf("Failed or missing: %d\n\n", n_failed))
-#   
+# 
 #   if (n_failed > 0) {
 #     cat("Failures / Missing sources:\n")
 #     for (nm in names(results)) {
@@ -1879,7 +1910,7 @@ updated_files <- map(covariate_files, update_excel_with_anon_backup,
 #       }
 #     }
 #   }
-#   
+# 
 #   invisible(results)
 # }
 # 
@@ -1888,7 +1919,7 @@ updated_files <- map(covariate_files, update_excel_with_anon_backup,
 # 
 # # Run
 # main()
-# 
+
 # 
 # # Read all files into a list of data frames
 # raw_data_backup <- list.files("data", full.names = TRUE, recursive = TRUE, pattern = "covariates") %>%
