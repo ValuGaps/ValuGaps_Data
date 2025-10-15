@@ -435,6 +435,19 @@ database <- all_data %>%
 
 all_data <- all_data %>%   distinct(RID,.keep_all=TRUE)
 
+
+# Deleting the choice experiment variable entries in all_data, that after collapsing of database only display one of ten choice sets per RID - potentially misleading
+DCE_var_names_to_clear <- c(setdiff(
+  readxl::read_excel("data/main_study/Main_7/Main_7_DCE_exp.xlsx", n_max = 0) %>% colnames(),
+  "RID"
+), "Dummy_pa_half", "Dummy_pa_full", "Dummy_hnv_visible", "Dummy_pa_no", "Dummy_hnv_no"
+)
+all_data <- all_data %>%
+  mutate(across(all_of(DCE_var_names_to_clear), ~ NA))
+
+
+
+
 complete_data <- database %>% 
   distinct(RID,.keep_all=TRUE) %>% 
   filter(STATUS_recoded == "Complete") %>% filter(DURATION >= 1/3*median_dur,
@@ -588,6 +601,7 @@ remove_vars <- function(df, vars_to_remove) {
 all_data <- remove_vars(all_data, all_vars_to_remove)
 complete_data <- remove_vars(complete_data, all_vars_to_remove)
 database <- remove_vars(database, all_vars_to_remove)
+
 
 
 
