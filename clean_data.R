@@ -87,7 +87,7 @@ rename_map <- c(
   "q27_1_9" = "eval_referendum_realism",
   "q27_1_10" = "eval_measures_effectiveness_belief",
   "q27_1_11" = "eval_policy_relevance_assumption",
-
+  
   "q1171" = "preferred_levy_distribution",
   "tc1" = "visited_nature_last12m",
   "nv_2a" = "natvisit_last12m_estimation_basis",
@@ -149,7 +149,7 @@ read_cov <- function(x) {
     map(read_excel) %>%
     bind_rows(.id = "dce_source") %>%
     mutate(RID=as.numeric(RID), pref1 = ifelse(grepl("swap", dce_source), 3 - as.numeric(pref1), as.numeric(pref1)))  # Adjust pref1 based on dce_source
-
+  
   # Read main dataset and process columns
   raw_data <- read_excel(x) %>%
     rename(
@@ -163,7 +163,7 @@ read_cov <- function(x) {
     mutate(
       RID = as.numeric(RID),
       survey_round = gsub("_covariates.xlsx", "", basename(x)),
-
+      
       
       # Recoding STATUS variable
       STATUS_recoded = case_when(
@@ -211,7 +211,7 @@ read_cov <- function(x) {
       
       
       # recode househole income
-            hhnetinc_recode = factor(hhnetinc, levels = c('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'),
+      hhnetinc_recode = factor(hhnetinc, levels = c('1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'),
                                labels = c('less than 500 Euro', '500 - 999 Euro', '1000 - 1499 Euro',
                                           '1500 - 1999 Euro', '2000 - 2499 Euro', '2500 - 2999 Euro',
                                           '3000 - 3499 Euro', '3500 - 3999 Euro', '4000 - 4999 Euro',
@@ -283,7 +283,7 @@ read_cov <- function(x) {
     left_join(read_excel(gsub("covariates", "timestamps", x) , col_types = "numeric") %>% mutate(RID=as.numeric(RID)), by = "RID") %>%
     mutate(across(starts_with("PAGE_SUBMIT"), ~ . - get(sub("SUBMIT", "DISPLAY", cur_column())), .names = "time_spent_{col}")) %>% 
     
-
+    
     
     # Merge DCE data
     left_join(dcedata, by = "RID") %>%
@@ -376,9 +376,9 @@ read_cov <- function(x) {
         TRUE ~ "Laptop/Other"
       ),
       NR_score = ifelse(uhh != 3 & nr6_1 != 6 & nr6_2 != 6 & nr6_3 != 6 &
-                                 nr6_4 != 6 & nr6_5 != 6 & nr6_6 != 6,
-                               (nr6_1 + nr6_2 + nr6_3 + nr6_4 + nr6_5 + nr6_6) / 6, 
-                               NA),
+                          nr6_4 != 6 & nr6_5 != 6 & nr6_6 != 6,
+                        (nr6_1 + nr6_2 + nr6_3 + nr6_4 + nr6_5 + nr6_6) / 6, 
+                        NA),
       
       # Convert character variables to appropriate types
       across(where(is.character), ~ type.convert(.x, as.is = TRUE)),
@@ -417,16 +417,16 @@ survey_round_map <- all_data %>%
   mutate(prefix = row_number() * 100000) %>%  # Assign a unique 10,000s prefix
   deframe()
 
-# Generate `RID_unique`
 all_data <- all_data %>%
-  mutate(RID_unique = survey_round_map[survey_round] + RID) %>% 
-  select(-RID_sample) %>%
-  arrange(RID_unique) %>% 
-  rename(RID_sample = RID, RID=RID_unique)
+  mutate(RID_unique = survey_round_map[survey_round] + RID) %>%
+  { if ("anon_applied" %in% names(.)) select(., -RID_sample) else . } %>%
+  arrange(RID_unique) %>%
+  rename(RID_sample = RID, RID = RID_unique) %>%
+  select(RID, everything())  
 
 all_data_complete <- all_data %>% 
   filter(STATUS_recoded == "Complete")
- 
+
 median_dur <- median(all_data_complete$DURATION)
 
 database <- all_data %>% 
@@ -451,7 +451,10 @@ all_data <- all_data %>%
 complete_data <- database %>% 
   distinct(RID,.keep_all=TRUE) %>% 
   filter(STATUS_recoded == "Complete") %>% filter(DURATION >= 1/3*median_dur,
-                                                  eval_attention_check == 4)
+                                                  eval_attention_check == 4,
+                                                  !is.na(lat),
+                                                  !is.na(lon)
+  )
 
 rm(read_cov, survey_round_map, all_data_complete)
 
@@ -610,15 +613,31 @@ database <- remove_vars(database, all_vars_to_remove)
 dir.create("finaldata", showWarnings = FALSE) 
 
 
-  save(
-    complete_data, all_data, database,
-    file = "finaldata/all_datasets.RData",
-    compress = "gzip",              # strongest compression
-    compression_level = 9,        # highest level (slowest, but smallest)
-    version = 3                   # modern serialization
-  )
+save(
+  complete_data, all_data, database,
+  file = "finaldata/all_datasets.RData",
+  compress = "gzip",              # strongest compression
+  compression_level = 9,        # highest level (slowest, but smallest)
+  version = 3                   # modern serialization
+)
 
 # library(osfr)
 # osf_retrieve_node("g7eac")  %>%
 #     osf_upload(path = "finaldata/all_datasets.RData",recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "override")
 
+# write_csv_custom <- function(x, file) {
+#   readr::write_csv(
+#     x = x,
+#     file = file,
+#     na = "NA",
+#     append = FALSE,
+#     col_names = TRUE,
+#     quote = "needed",
+#     escape = "double"
+#   )
+# }
+# 
+# # Use the function to write your CSVs
+# write_csv_custom(complete_data, "finaldata/complete_data.csv")
+# write_csv_custom(all_data, "finaldata/all_data.csv")
+# write_csv_custom(database, "finaldata/database.csv")
