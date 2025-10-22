@@ -163,7 +163,9 @@ read_cov <- function(x) {
     mutate(
       RID = as.numeric(RID),
       survey_round = gsub("_covariates.xlsx", "", basename(x)),
-      
+      # Convert timestamps
+      across(any_of(c("DATETIME.UTC", "anonymized_on")), 
+             ~ as.POSIXct(.x, format="%Y-%m-%d %H:%M:%S", tz="UTC")),
       
       # Recoding STATUS variable
       STATUS_recoded = case_when(
@@ -304,6 +306,16 @@ read_cov <- function(x) {
     
     # Create dummy variables for specific conditions
     mutate(
+      across(
+        any_of(c(
+          "order",
+          "most_visited_nature_type_RAND",
+          "dog_RAND",
+          "natvis_vhc_RAND",
+          "pol_btw_RAND"
+        )),
+        ~ ifelse(is.na(.x), NA_character_, gsub(",", "-", as.character(.x)))
+      ),
       Dummy_pa_half = case_when(a2_x2 == 2 ~ 1, TRUE ~ 0),
       Dummy_pa_full = case_when(a2_x2 == 3 ~ 1, TRUE ~ 0),
       Dummy_hnv_visible = case_when(a2_x4 == 2 ~ 1, TRUE ~ 0),
@@ -420,10 +432,36 @@ survey_round_map <- all_data %>%
 all_data <- all_data %>%
   mutate(RID_unique = survey_round_map[survey_round] + RID) %>%
   { if ("anon_applied" %in% names(.)) select(., -RID_sample) else . } %>%
+  group_by(RID_unique) %>%
+  mutate(DCE_order = row_number()) %>%  # capture original order within RID
+  ungroup() %>%
   arrange(RID_unique) %>%
   rename(RID_sample = RID, RID = RID_unique) %>%
-  select(RID, everything())  
-
+  select(RID, everything()) %>%
+  rowwise() %>%
+  mutate(
+    getZoom    = get(paste0("getZoom", DCE_order)),
+    getZoomMax = get(paste0("getZoomMax", DCE_order)),
+    getTime    = get(paste0("getTime", DCE_order)),
+    across(
+      any_of(c(
+        "knowledge_hnv_characteristic_RAND",
+        "knowledge_pa_effectiveness_RAND",
+        "envisioned_levy_distribution_RAND",
+        "preferred_levy_distribution_RAND"
+      )),
+      ~ ifelse(is.na(.x), NA_character_, gsub(",", "-", as.character(.x)))
+    )
+  ) %>%
+  ungroup() %>%
+  relocate(getZoom, getZoomMax, getTime, .after = getTime10) %>%
+  select(
+    -matches("^getZoom\\d+$"),
+    -matches("^getZoomMax\\d+$"),
+    -matches("^getTime\\d+$")
+  )
+  
+  
 all_data_complete <- all_data %>% 
   filter(STATUS_recoded == "Complete")
 
@@ -431,7 +469,7 @@ median_dur <- median(all_data_complete$DURATION)
 
 database <- all_data %>% 
   filter(STATUS_recoded == "Complete") %>% filter(DURATION >= 1/3*median_dur,
-                                                  eval_attention_check == 4)
+                                                  eval_attention_check == 4) 
 
 all_data <- all_data %>%   distinct(RID,.keep_all=TRUE)
 
@@ -440,7 +478,7 @@ all_data <- all_data %>%   distinct(RID,.keep_all=TRUE)
 DCE_var_names_to_clear <- c(setdiff(
   readxl::read_excel("data/main_study/Main_7/Main_7_DCE_exp.xlsx", n_max = 0) %>% colnames(),
   "RID"
-), "Dummy_pa_half", "Dummy_pa_full", "Dummy_hnv_visible", "Dummy_pa_no", "Dummy_hnv_no"
+), "Dummy_pa_half", "Dummy_pa_full", "Dummy_hnv_visible", "Dummy_pa_no", "Dummy_hnv_no", "getZoom", "getZoomMax", "getTime"
 )
 all_data <- all_data %>%
   mutate(across(all_of(DCE_var_names_to_clear), ~ NA))
@@ -621,23 +659,71 @@ save(
   version = 3                   # modern serialization
 )
 
-# library(osfr)
-# osf_retrieve_node("g7eac")  %>%
-#     osf_upload(path = "finaldata/all_datasets.RData",recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "override")
 
-# write_csv_custom <- function(x, file) {
-#   readr::write_csv(
-#     x = x,
+### WRITE CSV ###########
+options(readr.num_columns = "I") 
+write_csv_custom <- function(x, file) {
+  readr::write_csv(
+    dplyr::mutate_if(x, is.numeric, ~ format(., scientific = FALSE, digits = 15)),
+    file = file,
+    na = "NA",
+    escape = "double"
+  )
+  spec <- readr::spec(x)
+  saveRDS(spec, paste0(file, ".spec.rds"))
+}
+
+# Use the function to write your CSVs
+write_csv_custom(complete_data, "finaldata/complete_data.csv")
+write_csv_custom(all_data, "finaldata/all_data.csv")
+write_csv_custom(database, "finaldata/database.csv")
+
+
+library(osfr)
+osf_node <- osf_retrieve_node("g7eac")
+
+files_to_upload <- c(
+  "finaldata/complete_data.csv",
+  "finaldata/all_data.csv",
+  "finaldata/database.csv",
+  "finaldata/all_datasets.RData"
+)
+
+# Upload each file, override if already exists
+lapply(files_to_upload, function(f) {
+  osf_upload(
+    osf_node,
+    path = f,
+    recurse = TRUE,
+    progress = TRUE,
+    verbose = TRUE,
+    conflicts = "override"
+  )
+})
+
+# ### READ ###########
+# read_csv_with_spec <- function(file, specfile = paste0(file, ".spec.rds"),
+#                                timestamp_cols = c("DATETIME.UTC", "anonymized_on")) {
+#   if (!file.exists(specfile)) {
+#     stop("Spec file not found: ", specfile, 
+#          ". Use write_csv_custom() when writing to generate it.")
+#   }
+#   spec <- readRDS(specfile)
+#   df <- readr::read_csv(
 #     file = file,
 #     na = "NA",
-#     append = FALSE,
-#     col_names = TRUE,
-#     quote = "needed",
-#     escape = "double"
+#     col_types = spec$cols,
+#     locale = readr::locale(encoding = "UTF-8"),
+#     guess_max = 1
 #   )
+#   
+#   df <- dplyr::mutate(df, dplyr::across(all_of(timestamp_cols), ~ as.POSIXct(., format = "%Y-%m-%d %H:%M:%S", tz = "UTC")))
+# 
+#   return(df)
 # }
 # 
-# # Use the function to write your CSVs
-# write_csv_custom(complete_data, "finaldata/complete_data.csv")
-# write_csv_custom(all_data, "finaldata/all_data.csv")
-# write_csv_custom(database, "finaldata/database.csv")
+# 
+# # READ
+# complete_data_csv <- read_csv_with_spec("finaldata/complete_data.csv")
+# all_data_csv      <- read_csv_with_spec("finaldata/all_data.csv")
+# database_csv      <- read_csv_with_spec("finaldata/database.csv")
