@@ -673,24 +673,33 @@ write_csv_custom <- function(x, file) {
   saveRDS(spec, paste0(file, ".spec.rds"))
 }
 
-# Use the function to write your CSVs
-write_csv_custom(complete_data, "finaldata/complete_data.csv")
-write_csv_custom(all_data, "finaldata/all_data.csv")
-write_csv_custom(database, "finaldata/database.csv")
+# Write CSVs compressed with gzip
+write_csv_custom_gz <- function(df, file) {
+  gzfile_path <- paste0(file, ".gz")  # add .gz extension
+  readr::write_csv(
+    dplyr::mutate_if(df, is.numeric, ~ format(., scientific = FALSE, digits = 15)),
+    file = gzfile(gzfile_path),
+    na = "NA",
+    escape = "double"
+  )
+  spec <- readr::spec(df)
+  saveRDS(spec, paste0(file, ".spec.rds"))
+  return(gzfile_path)
+}
 
-
-library(osfr)
-osf_node <- osf_retrieve_node("g7eac")
-
-files_to_upload <- c(
-  "finaldata/complete_data.csv",
-  "finaldata/all_data.csv",
-  "finaldata/database.csv",
+# Write and compress
+compressed_files <- c(
+  write_csv_custom_gz(complete_data, "finaldata/complete_data.csv"),
+  write_csv_custom_gz(all_data, "finaldata/all_data.csv"),
+  write_csv_custom_gz(database, "finaldata/database.csv"),
   "finaldata/all_datasets.RData"
 )
 
-# Upload each file, override if already exists
-lapply(files_to_upload, function(f) {
+# Upload to OSF
+library(osfr)
+osf_node <- osf_retrieve_node("g7eac")
+
+lapply(compressed_files, function(f) {
   osf_upload(
     osf_node,
     path = f,
@@ -700,6 +709,7 @@ lapply(files_to_upload, function(f) {
     conflicts = "override"
   )
 })
+
 
 # ### READ ###########
 # read_csv_with_spec <- function(file, specfile = paste0(file, ".spec.rds"),
