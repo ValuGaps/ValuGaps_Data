@@ -1,7 +1,5 @@
 
-
-
-
+# ---- LOAD packages ########
 library(tidyverse)
 library(readxl)
 library(purrr)
@@ -9,53 +7,62 @@ library(tidylog)
 library(sf)
 library(utils)
 
-# source("Scripts/get_data.R")
+if(!require("cloudR")) {
+  devtools::install_git('https://github.com/sagebiej/cloudR')
+}
 
-#Get rid of annoying dates
+# ---- LOAD necessary data ########
+##### Survey data #####
+# Local folder to extract to
+dest_folder <- "data_anon/"
+if (!dir.exists(dest_folder)) dir.create(dest_folder, recursive = TRUE)
+anon_data <- "https://files.de-1.osf.io/v1/resources/zpfgj/providers/osfstorage/?view_only=022e9fba76e744bba50595672791e9de&zip="
+cloudR::download_and_extract_zip(url = anon_data ,dest_folder = dest_folder , zip_name = "data_anon.zip")
 
-# 
-# filerename <-function(x){
-# 
-#  file.rename(x, gsub("_\\d{4}[-_]\\d{2}[-_]\\d{2}", "", x))
-# #file.rename(x, gsub("VALUGAPs_Main_3_Round_5", "Main_7", x))
-# 
-# 
-# 
-#   return(x)
+
+##### Secondary data #####
+
+## Spatial data
+
+### Shapefiles
+shapefiles <- "https://files.de-1.osf.io/v1/resources/e2zvy/providers/osfstorage/6808b9baa1768f2bd839a7c1/?view_only=f08b8c286f7a49279b5e472826c9090c&zip="
+cloudR::download_and_extract_zip(url = shapefiles ,dest_folder = "secondary_data/germany_shapefiles/old" , zip_name = "shape.zip")
+
+### Alkis data
+if(!dir.exists("secondary_data/ALKIS")) {
+  dir.create("secondary_data/ALKIS" ,recursive = T)
+  cat("Downloading ALKIS...\n")
+  cloudR::download_and_extract_zip("https://files.de-1.osf.io/v1/resources/e2zvy/providers/osfstorage/68c2d640ffce999ac0a6c1bc/?view_only=f08b8c286f7a49279b5e472826c9090c&zip=", zip_name = "alkis.zip", dest_folder = "secondary_data/ALKIS/old")
+}
+
+### vg250gem
+if(!dir.exists("secondary_data/vg250_gem/")) {
+  dir.create("secondary_data/vg250_gem/" ,recursive = T)
+  cat("Downloading vg250_gem...\n")
+  cloudR::download_and_extract_zip("https://files.de-1.osf.io/v1/resources/e2zvy/providers/osfstorage/68c2d65273f5eb91955d8180/?view_only=f08b8c286f7a49279b5e472826c9090c&zip=", zip_name = "alkis.zip", dest_folder = "secondary_data/vg250_gem/old")
+}
+
+# ## Census data
+# if(!dir.exists("secondary_data/census")) {
+#   dir.create("secondary_data/census" ,recursive = T)
+#   
+#   cat("Downloading census data...\n")
+#   cloudR::download_and_extract_zip("https://files.de-1.osf.io/v1/resources/e2zvy/providers/osfstorage/682dd4be76df44ca46b06cdd/?view_only=f08b8c286f7a49279b5e472826c9090c&zip=", zip_name = "census.zip", dest_folder = "secondary_data/census/old")
 # }
 # 
-# filerename <- function(x) {
-#   # Generate new names
-#   new_names <- stringr::str_replace_all(x, "(DCE)|([ECTS])", function(z) {
-#     if (!is.na(z[1]) && z[1] == "DCE") {
-#       return("DCE")
-#     } else {
-#       return(tolower(z))
-#     }
-#   })
-# 
-#   # Perform the renaming
-#   file.rename(x, new_names)
-# 
-#   # Show what changed
-#   result <- data.frame(
-#     original = x,
-#     renamed  = new_names,
-#     stringsAsFactors = FALSE
-#   )
-# 
-#   print(result)
-#   invisible(result)
+# ## ZIP data
+# if (!dir.exists("secondary_data/PLZ_data")) {
+#   dir.create("secondary_data/PLZ_data", recursive = TRUE)
+#   
+#   csv_url <- "https://public.opendatasoft.com/explore/dataset/georef-germany-postleitzahl/download/?format=csv&timezone=Europe/Berlin&lang=en"
+#   destfile <- "secondary_data/PLZ_data/georef-germany-postleitzahl.csv"
+#   
+#   cat("Downloading PLZ csv file...\n")
+#   download.file(csv_url, destfile, mode = "wb")
 # }
-# 
-# 
-# 
-# 
-# purrr::map(list.files("data/main_study/Main_7/", full.names = TRUE, recursive = T), filerename)
-
-###### Readin all covariate files  ##### 
 
 
+# ---- READ IN all covariate files ########
 rename_map <- c(
   "q1" = "participation_consent",
   "q2_1" = "res_settlement_type",
