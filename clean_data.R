@@ -1,3 +1,4 @@
+# ------ USE OF FILE ---------------
 
 # ---- LOAD packages ########
 library(tidyverse)
@@ -41,26 +42,6 @@ if(!dir.exists("secondary_data/vg250_gem/")) {
   cat("Downloading vg250_gem...\n")
   cloudR::download_and_extract_zip("https://files.de-1.osf.io/v1/resources/e2zvy/providers/osfstorage/68c2d65273f5eb91955d8180/?view_only=f08b8c286f7a49279b5e472826c9090c&zip=", zip_name = "alkis.zip", dest_folder = "secondary_data/vg250_gem/old")
 }
-
-# ## Census data
-# if(!dir.exists("secondary_data/census")) {
-#   dir.create("secondary_data/census" ,recursive = T)
-#   
-#   cat("Downloading census data...\n")
-#   cloudR::download_and_extract_zip("https://files.de-1.osf.io/v1/resources/e2zvy/providers/osfstorage/682dd4be76df44ca46b06cdd/?view_only=f08b8c286f7a49279b5e472826c9090c&zip=", zip_name = "census.zip", dest_folder = "secondary_data/census/old")
-# }
-# 
-# ## ZIP data
-# if (!dir.exists("secondary_data/PLZ_data")) {
-#   dir.create("secondary_data/PLZ_data", recursive = TRUE)
-#   
-#   csv_url <- "https://public.opendatasoft.com/explore/dataset/georef-germany-postleitzahl/download/?format=csv&timezone=Europe/Berlin&lang=en"
-#   destfile <- "secondary_data/PLZ_data/georef-germany-postleitzahl.csv"
-#   
-#   cat("Downloading PLZ csv file...\n")
-#   download.file(csv_url, destfile, mode = "wb")
-# }
-
 
 # ---- READ IN all covariate files ########
 rename_map <- c(
