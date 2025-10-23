@@ -7,6 +7,7 @@ library(readxl)
 library(purrr)
 library(tidylog)
 library(sf)
+library(utils)
 
 # source("Scripts/get_data.R")
 
@@ -660,80 +661,110 @@ save(
 )
 
 
-### WRITE CSV ###########
-options(readr.num_columns = "I") 
-write_csv_custom <- function(x, file) {
-  readr::write_csv(
-    dplyr::mutate_if(x, is.numeric, ~ format(., scientific = FALSE, digits = 15)),
-    file = file,
-    na = "NA",
-    escape = "double"
-  )
-  spec <- readr::spec(x)
-  saveRDS(spec, paste0(file, ".spec.rds"))
-}
+### WRITE CSV ##########
 
-# Write CSVs compressed with gzip
-write_csv_custom_gz <- function(df, file) {
-  gzfile_path <- paste0(file, ".gz")  # add .gz extension
+# --- WRITE CSVs AND SPEC FILES ---
+options(readr.num_columns = "I") 
+
+write_csv_custom <- function(df, file) {
   readr::write_csv(
     dplyr::mutate_if(df, is.numeric, ~ format(., scientific = FALSE, digits = 15)),
-    file = gzfile(gzfile_path),
+    file = file,
     na = "NA",
     escape = "double"
   )
   spec <- readr::spec(df)
   saveRDS(spec, paste0(file, ".spec.rds"))
-  return(gzfile_path)
+  return(c(file, paste0(file, ".spec.rds")))  # return paths of CSV + spec
 }
 
-# Write and compress
-compressed_files <- c(
-  write_csv_custom_gz(complete_data, "finaldata/complete_data.csv"),
-  write_csv_custom_gz(all_data, "finaldata/all_data.csv"),
-  write_csv_custom_gz(database, "finaldata/database.csv"),
-  "finaldata/all_datasets.RData"
+# Write all CSVs + specs and capture file paths
+all_files <- c(
+  write_csv_custom(complete_data, "finaldata/complete_data.csv"),
+  write_csv_custom(all_data, "finaldata/all_data.csv"),
+  write_csv_custom(database, "finaldata/database.csv")
 )
 
-# Upload to OSF
+# --- CREATE ZIP ARCHIVE ---
+zip_file <- "finaldata/all_datasets_zip.zip"
+zip(zipfile = zip_file, files = all_files, flags = "-j") 
+
+# # Write CSVs compressed with gzip
+# write_csv_custom_gz <- function(df, file) {
+#   gzfile_path <- paste0(file, ".gz")  # add .gz extension
+#   readr::write_csv(
+#     dplyr::mutate_if(df, is.numeric, ~ format(., scientific = FALSE, digits = 15)),
+#     file = gzfile(gzfile_path),
+#     na = "NA",
+#     escape = "double"
+#   )
+#   spec <- readr::spec(df)
+#   saveRDS(spec, paste0(file, ".spec.rds"))
+#   return(gzfile_path)
+# }
+
+# # Write and compress
+# compressed_files <- c(
+#   write_csv_custom_gz(complete_data, "finaldata/complete_data.csv"),
+#   write_csv_custom_gz(all_data, "finaldata/all_data.csv"),
+#   write_csv_custom_gz(database, "finaldata/database.csv")
+# )
+
+
+# --- UPLOAD TO OSF ---
 library(osfr)
 osf_node <- osf_retrieve_node("g7eac")
 
-lapply(compressed_files, function(f) {
-  osf_upload(
-    osf_node,
-    path = f,
-    recurse = TRUE,
-    progress = TRUE,
-    verbose = TRUE,
-    conflicts = "override"
+osf_upload(
+  osf_node,
+  path = zip_file,
+  recurse = TRUE,
+  progress = TRUE,
+  verbose = TRUE,
+  conflicts = "override"
+)
+
+# osf_retrieve_node("g7eac")  %>%
+#     osf_upload(path = "finaldata/all_datasets.RData",recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "override")
+
+
+
+#### READ ###########
+read_csv_from_zip <- function(zip_file, csv_name, timestamp_cols = c("DATETIME.UTC", "anonymized_on")) {
+  
+  # Create a temporary directory
+  tmp_dir <- tempdir()
+  
+  # Unzip CSV + spec to temp dir
+  unzip(zip_file, files = c(csv_name, paste0(csv_name, ".spec.rds")), exdir = tmp_dir)
+  
+  csv_path  <- file.path(tmp_dir, csv_name)
+  spec_path <- file.path(tmp_dir, paste0(csv_name, ".spec.rds"))
+  
+  if (!file.exists(spec_path)) stop("Spec file not found inside zip: ", spec_path)
+  
+  # Load spec
+  spec <- readRDS(spec_path)
+  
+  # Read CSV with spec
+  df <- readr::read_csv(
+    file = csv_path,
+    na = "NA",
+    col_types = spec$cols,
+    locale = readr::locale(encoding = "UTF-8"),
+    guess_max = 1
   )
-})
+  
+  # Convert timestamps
+  df <- df %>% 
+    mutate(across(all_of(timestamp_cols), ~ as.POSIXct(., format="%Y-%m-%d %H:%M:%S", tz="UTC")))
+  
+  return(df)
+}
 
+# --- Example usage ---
+zip_file <- "finaldata/all_datasets_zip.zip"
 
-# ### READ ###########
-# read_csv_with_spec <- function(file, specfile = paste0(file, ".spec.rds"),
-#                                timestamp_cols = c("DATETIME.UTC", "anonymized_on")) {
-#   if (!file.exists(specfile)) {
-#     stop("Spec file not found: ", specfile, 
-#          ". Use write_csv_custom() when writing to generate it.")
-#   }
-#   spec <- readRDS(specfile)
-#   df <- readr::read_csv(
-#     file = file,
-#     na = "NA",
-#     col_types = spec$cols,
-#     locale = readr::locale(encoding = "UTF-8"),
-#     guess_max = 1
-#   )
-#   
-#   df <- dplyr::mutate(df, dplyr::across(all_of(timestamp_cols), ~ as.POSIXct(., format = "%Y-%m-%d %H:%M:%S", tz = "UTC")))
-# 
-#   return(df)
-# }
-# 
-# 
-# # READ
-# complete_data_csv <- read_csv_with_spec("finaldata/complete_data.csv")
-# all_data_csv      <- read_csv_with_spec("finaldata/all_data.csv")
-# database_csv      <- read_csv_with_spec("finaldata/database.csv")
+complete_data_csv <- read_csv_from_zip(zip_file, "complete_data.csv")
+all_data_csv      <- read_csv_from_zip(zip_file, "all_data.csv")
+database_csv      <- read_csv_from_zip(zip_file, "database.csv")
