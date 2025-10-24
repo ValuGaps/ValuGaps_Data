@@ -1,4 +1,8 @@
 # ------ USE OF FILE ---------------
+# This file is ...
+# ... reading in the raw .xlsx files, renaming, recoding and ejecting variables and converting their types to the appropriate format;
+# ... creating the relevant dataframes for analyses (all_data, complete_data, database);
+# ... writing them as .csv files to enable and facilitate their use in systems outside of R.
 
 # ---- LOAD packages ########
 library(tidyverse)
@@ -14,11 +18,16 @@ if(!require("cloudR")) {
 
 # ---- LOAD necessary data ########
 ##### Survey data #####
-# Local folder to extract to
-dest_folder <- "data_anon/"
-if (!dir.exists(dest_folder)) dir.create(dest_folder, recursive = TRUE)
-anon_data <- "https://files.de-1.osf.io/v1/resources/zpfgj/providers/osfstorage/?view_only=022e9fba76e744bba50595672791e9de&zip="
-cloudR::download_and_extract_zip(url = anon_data ,dest_folder = dest_folder , zip_name = "data_anon.zip")
+### anon_data
+if (!dir.exists("data_anon")) {
+  dir.create("data_anon", recursive = TRUE)
+  cat("Downloading anon_data...\n")
+  cloudR::download_and_extract_zip(
+    "https://files.de-1.osf.io/v1/resources/zpfgj/providers/osfstorage/?view_only=022e9fba76e744bba50595672791e9de&zip=",
+    zip_name = "anon_data.zip",
+    dest_folder = "data_anon/old"
+  )
+}
 
 
 ##### Secondary data #####
