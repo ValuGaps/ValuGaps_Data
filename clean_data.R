@@ -589,7 +589,7 @@ vars_wo_relevance <- c(
   "hnv1_miss", "hnv2_miss", "hnv3_miss", "hnv4_miss", "hnv5_miss", "hnv6_miss",
   "hnv1_corr", "hnv2_corr", "hnv3_corr", "hnv4_corr", "hnv5_corr", "hnv6_corr",
   "exit_code", "status_vars_group",
-  "hnv_miss_group", "hnv_corr_group"
+  "hnv_miss_group", "hnv_corr_group", "visited_nature_last12m_alt"
 )
 
 vars_dce_group <- grep("^dce_[a-j]", names(all_data), value = TRUE)
@@ -616,10 +616,9 @@ vars_obsolete_from_recode <- c(
   "dce_source",
   "natvisit_recreation",
   "attention_check_fail",
-  "hhnetinc_numeric"
+  "hhnetinc_numeric",
+  "SCENARIO", "SEQ"
 )
-
-#What about SCENARIO, SEQ, DESIGN_ROW
 
 all_vars_to_remove <- Reduce(union, list(
   vars_wo_relevance, 
@@ -726,42 +725,41 @@ osf_upload(
 
 
 
-#### READ ###########
-read_csv_from_zip <- function(zip_file, csv_name, timestamp_cols = c("DATETIME.UTC", "anonymized_on")) {
-  
-  # Create a temporary directory
-  tmp_dir <- tempdir()
-  
-  # Unzip CSV + spec to temp dir
-  unzip(zip_file, files = c(csv_name, paste0(csv_name, ".spec.rds")), exdir = tmp_dir)
-  
-  csv_path  <- file.path(tmp_dir, csv_name)
-  spec_path <- file.path(tmp_dir, paste0(csv_name, ".spec.rds"))
-  
-  if (!file.exists(spec_path)) stop("Spec file not found inside zip: ", spec_path)
-  
-  # Load spec
-  spec <- readRDS(spec_path)
-  
-  # Read CSV with spec
-  df <- readr::read_csv(
-    file = csv_path,
-    na = "NA",
-    col_types = spec$cols,
-    locale = readr::locale(encoding = "UTF-8"),
-    guess_max = 1
-  )
-  
-  # Convert timestamps
-  df <- df %>% 
-    mutate(across(all_of(timestamp_cols), ~ as.POSIXct(., format="%Y-%m-%d %H:%M:%S", tz="UTC")))
-  
-  return(df)
-}
+# #### READ ###########
+# read_csv_from_zip <- function(zip_file, csv_name, timestamp_cols = c("DATETIME.UTC", "anonymized_on")) {
+#   
+#   # Create a temporary directory
+#   tmp_dir <- tempdir()
+#   
+#   # Unzip CSV + spec to temp dir
+#   unzip(zip_file, files = c(csv_name, paste0(csv_name, ".spec.rds")), exdir = tmp_dir)
+#   
+#   csv_path  <- file.path(tmp_dir, csv_name)
+#   spec_path <- file.path(tmp_dir, paste0(csv_name, ".spec.rds"))
+#   
+#   if (!file.exists(spec_path)) stop("Spec file not found inside zip: ", spec_path)
+#   
+#   # Load spec
+#   spec <- readRDS(spec_path)
+#   
+#   # Read CSV with spec
+#   df <- readr::read_csv(
+#     file = csv_path,
+#     na = "NA",
+#     col_types = spec$cols,
+#     locale = readr::locale(encoding = "UTF-8"),
+#     guess_max = 1
+#   )
+#   
+#   # Convert timestamps
+#   df <- df %>% 
+#     mutate(across(all_of(timestamp_cols), ~ as.POSIXct(., format="%Y-%m-%d %H:%M:%S", tz="UTC")))
+#   
+#   return(df)
+# }
 
-# --- Example usage ---
-zip_file <- "finaldata/all_datasets_zip.zip"
-
-complete_data_csv <- read_csv_from_zip(zip_file, "complete_data.csv")
-all_data_csv      <- read_csv_from_zip(zip_file, "all_data.csv")
-database_csv      <- read_csv_from_zip(zip_file, "database.csv")
+# zip_file <- "finaldata/all_datasets_zip.zip"
+# 
+# complete_data_csv <- read_csv_from_zip(zip_file, "complete_data.csv")
+# all_data_csv      <- read_csv_from_zip(zip_file, "all_data.csv")
+# database_csv      <- read_csv_from_zip(zip_file, "database.csv")
