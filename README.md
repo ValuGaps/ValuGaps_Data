@@ -4,19 +4,19 @@
 # ValuGaps_Data
 
 <!-- badges: start -->
+
 <!-- badges: end -->
 
 This git repo allows you to access the data used in the ValuGaps project
 and understand the process of creating the dataset. If you only want to
-download the raw dataset, you can find it on OSF
-<https://osf.io/9dw2j/?view_only=015b3489509c42cbb3d7bb38f0e02d39>
+download the raw dataset, you can find it on the iData repository \[LINK
+WILL FOLLOW\]
 
-If you want to work with the repo, you first have to clone it and
-download the data via the script `download_data.R`. This script will
-download the data from OSF and save it in the `data` folder. You can
+If you want to work with the repo, you first have to clone itYou can
 then run the script `clean_data.R` to create the dataset used in the
-ValuGaps project. This is the recommended dataset to use for the
-project, as it is cleaned and ready to use.
+ValuGaps project. It will automatically download the data. This is the
+recommended dataset to use for the project, as it is cleaned and ready
+to use.
 
 ## Description of the output
 
