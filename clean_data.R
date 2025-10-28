@@ -35,8 +35,12 @@ if (!dir.exists("data_anon")) {
 ## Spatial data
 
 ### Shapefiles
-shapefiles <- "https://files.de-1.osf.io/v1/resources/e2zvy/providers/osfstorage/6808b9baa1768f2bd839a7c1/?view_only=f08b8c286f7a49279b5e472826c9090c&zip="
-cloudR::download_and_extract_zip(url = shapefiles ,dest_folder = "secondary_data/germany_shapefiles/old" , zip_name = "shape.zip")
+if(!dir.exists("secondary_data/germany_shapefiles/")) {
+  dir.create("secondary_data/germany_shapefiles/" ,recursive = T)
+  cat("Downloading shapefiles...\n")
+  shapefiles <- "https://files.de-1.osf.io/v1/resources/e2zvy/providers/osfstorage/6808b9baa1768f2bd839a7c1/?view_only=f08b8c286f7a49279b5e472826c9090c&zip="
+  cloudR::download_and_extract_zip(url = shapefiles ,dest_folder = "secondary_data/germany_shapefiles/old" , zip_name = "shape.zip")
+}
 
 ### Alkis data
 if(!dir.exists("secondary_data/ALKIS")) {
@@ -476,11 +480,10 @@ all_data <- all_data %>%   distinct(RID,.keep_all=TRUE)
 DCE_var_names_to_clear <- c(setdiff(
   readxl::read_excel("data/main_study/Main_7/Main_7_DCE_exp.xlsx", n_max = 0) %>% colnames(),
   "RID"
-), "Dummy_pa_half", "Dummy_pa_full", "Dummy_hnv_visible", "Dummy_pa_no", "Dummy_hnv_no", "getZoom", "getZoomMax", "getTime"
+), "Dummy_pa_half", "Dummy_pa_full", "Dummy_hnv_visible", "Dummy_pa_no", "Dummy_hnv_no", "getZoom", "getZoomMax", "getTime", "hnv_att", "cost_att", "pa_att", "pref1"
 )
 all_data <- all_data %>%
   mutate(across(all_of(DCE_var_names_to_clear), ~ NA))
-
 
 
 
@@ -617,7 +620,8 @@ vars_obsolete_from_recode <- c(
   "natvisit_recreation",
   "attention_check_fail",
   "hhnetinc_numeric",
-  "SCENARIO", "SEQ"
+  "SCENARIO", "SEQ",
+  "protest_1_recode", "protest_2_recode", "protest_3_recode", "protest_4_recode", "protest_5_recode"
 )
 
 all_vars_to_remove <- Reduce(union, list(
@@ -720,8 +724,8 @@ osf_upload(
   conflicts = "override"
 )
 
-# osf_retrieve_node("g7eac")  %>%
-#     osf_upload(path = "finaldata/all_datasets.RData",recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "override")
+osf_retrieve_node("g7eac")  %>%
+    osf_upload(path = "finaldata/all_datasets.RData",recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "override")
 
 
 
