@@ -11,6 +11,8 @@ library(purrr)
 library(tidylog)
 library(sf)
 library(utils)
+library(osfr)
+
 
 if(!require("cloudR")) {
   devtools::install_git('https://github.com/sagebiej/cloudR')
@@ -26,6 +28,16 @@ if (!dir.exists("data_anon")) {
     "https://files.de-1.osf.io/v1/resources/zpfgj/providers/osfstorage/?view_only=022e9fba76e744bba50595672791e9de&zip=",
     zip_name = "anon_data.zip",
     dest_folder = "data_anon/old"
+  )
+}
+### unanon_data
+if (!dir.exists("data_unanon")) {
+  dir.create("data_unanon", recursive = TRUE)
+  cat("Downloading unanon_data...\n")
+  cloudR::download_and_extract_zip(
+    "https://files.de-1.osf.io/v1/resources/9dw2j/providers/osfstorage/?view_only=06944700737d45b585e1a94b56945f7f&zip=",
+    zip_name = "unanon_data.zip",
+    dest_folder = "data_unanon/old"
   )
 }
 
@@ -419,168 +431,278 @@ read_cov <- function(x) {
 
 
 # Read all files into a list of data frames
-raw_data <- list.files("data", full.names = TRUE, recursive = TRUE, pattern = "covariates") %>%
-  purrr::set_names(gsub("_covariates.xlsx","",basename(.))) %>% 
-  map(read_cov)
-
-
-all_data <- bind_rows(raw_data, .id = "survey_round")
-
-survey_round_map <- all_data %>%
-  distinct(survey_round) %>%
-  mutate(prefix = row_number() * 100000) %>%  # Assign a unique 10,000s prefix
-  deframe()
-
-all_data <- all_data %>%
-  mutate(RID_unique = survey_round_map[survey_round] + RID) %>%
-  { if ("anon_applied" %in% names(.)) select(., -RID_sample) else . } %>%
-  group_by(RID_unique) %>%
-  mutate(DCE_order = row_number()) %>%  # capture original order within RID
-  ungroup() %>%
-  arrange(RID_unique) %>%
-  rename(RID_sample = RID, RID = RID_unique) %>%
-  select(RID, everything()) %>%
-  rowwise() %>%
-  mutate(
-    getZoom    = get(paste0("getZoom", DCE_order)),
-    getZoomMax = get(paste0("getZoomMax", DCE_order)),
-    getTime    = get(paste0("getTime", DCE_order)),
-    across(
-      any_of(c(
-        "knowledge_hnv_characteristic_RAND",
-        "knowledge_pa_effectiveness_RAND",
-        "envisioned_levy_distribution_RAND",
-        "preferred_levy_distribution_RAND"
-      )),
-      ~ ifelse(is.na(.x), NA_character_, gsub(",", "-", as.character(.x)))
+process_data_folder <- function(folder_path) {
+  # Read all files into a list of data frames
+  raw_data <- list.files(folder_path, full.names = TRUE, recursive = TRUE, pattern = "covariates") %>%
+    purrr::set_names(gsub("_covariates.xlsx", "", basename(.))) %>%
+    map(read_cov)
+  
+  all_data <- bind_rows(raw_data, .id = "survey_round")
+  
+  # Create unique RID
+  survey_round_map <- all_data %>%
+    distinct(survey_round) %>%
+    mutate(prefix = row_number() * 100000) %>%
+    deframe()
+  
+  all_data <- all_data %>%
+    mutate(RID_unique = survey_round_map[survey_round] + RID) %>%
+    { if ("anon_applied" %in% names(.)) select(., -RID_sample) else . } %>%
+    group_by(RID_unique) %>%
+    mutate(DCE_order = row_number()) %>%
+    ungroup() %>%
+    arrange(RID_unique) %>%
+    rename(RID_sample = RID, RID = RID_unique) %>%
+    select(RID, everything()) %>%
+    rowwise() %>%
+    mutate(
+      getZoom    = get(paste0("getZoom", DCE_order)),
+      getZoomMax = get(paste0("getZoomMax", DCE_order)),
+      getTime    = get(paste0("getTime", DCE_order)),
+      across(
+        any_of(c(
+          "knowledge_hnv_characteristic_RAND",
+          "knowledge_pa_effectiveness_RAND",
+          "envisioned_levy_distribution_RAND",
+          "preferred_levy_distribution_RAND"
+        )),
+        ~ ifelse(is.na(.x), NA_character_, gsub(",", "-", as.character(.x)))
+      )
+    ) %>%
+    ungroup() %>%
+    relocate(getZoom, getZoomMax, getTime, .after = getTime10) %>%
+    select(
+      -matches("^getZoom\\d+$"),
+      -matches("^getZoomMax\\d+$"),
+      -matches("^getTime\\d+$")
     )
-  ) %>%
-  ungroup() %>%
-  relocate(getZoom, getZoomMax, getTime, .after = getTime10) %>%
-  select(
-    -matches("^getZoom\\d+$"),
-    -matches("^getZoomMax\\d+$"),
-    -matches("^getTime\\d+$")
+  
+  # Filter for complete data
+  all_data_complete <- all_data %>%
+    filter(STATUS_recoded == "Complete")
+  
+  median_dur <- median(all_data_complete$DURATION)
+  
+  database <- all_data %>%
+    filter(STATUS_recoded == "Complete") %>%
+    filter(DURATION >= 1/3 * median_dur, eval_attention_check == 4)
+  
+  all_data <- all_data %>%
+    distinct(RID, .keep_all = TRUE)
+  
+  # Clear DCE variables
+  DCE_var_names_to_clear <- c(
+    setdiff(
+      readxl::read_excel(file.path(folder_path, "main_study/Main_7/Main_7_DCE_exp.xlsx"), n_max = 0) %>%
+        colnames(),
+      "RID"
+    ),
+    "Dummy_pa_half", "Dummy_pa_full", "Dummy_hnv_visible", "Dummy_pa_no",
+    "Dummy_hnv_no", "getZoom", "getZoomMax", "getTime", "hnv_att", "cost_att",
+    "pa_att", "pref1"
   )
   
+  all_data <- all_data %>%
+    mutate(across(all_of(DCE_var_names_to_clear), ~ NA))
   
-all_data_complete <- all_data %>% 
-  filter(STATUS_recoded == "Complete")
+  complete_data <- database %>%
+    distinct(RID, .keep_all = TRUE) %>%
+    filter(STATUS_recoded == "Complete") %>%
+    filter(DURATION >= 1/3 * median_dur, eval_attention_check == 4, !is.na(lat), !is.na(lon))
+  
+  # Return all processed dataframes
+  return(list(
+    all_data = all_data,
+    database = database,
+    complete_data = complete_data
+  ))
+}
 
-median_dur <- median(all_data_complete$DURATION)
+# Process anonymized and unanonymized data
+for (folder in c("data_unanon", "data_anon")) {
+  if (dir.exists(folder)) {
+    message("Processing ", folder, "...")
+    assign(paste0(sub("data_", "", folder), "_results"),
+           process_data_folder(folder))
+  } else {
+    message("Folder ", folder, " not found; skipping.")
+  }
+}
 
-database <- all_data %>% 
-  filter(STATUS_recoded == "Complete") %>% filter(DURATION >= 1/3*median_dur,
-                                                  eval_attention_check == 4) 
+# Access results for data_unanon
+if (exists("unanon_results")) {
+  all_data_unanon <- unanon_results$all_data
+  database_unanon <- unanon_results$database
+  complete_data_unanon <- unanon_results$complete_data
+}
 
-all_data <- all_data %>%   distinct(RID,.keep_all=TRUE)
+# Access results for data_anon
+if (exists("anon_results")) {
+  all_data_anon <- anon_results$all_data
+  database_anon <- anon_results$database
+  complete_data_anon <- anon_results$complete_data
+}
 
-
-# Deleting the choice experiment variable entries in all_data, that after collapsing of database only display one of ten choice sets per RID - potentially misleading
-DCE_var_names_to_clear <- c(setdiff(
-  readxl::read_excel("data/main_study/Main_7/Main_7_DCE_exp.xlsx", n_max = 0) %>% colnames(),
-  "RID"
-), "Dummy_pa_half", "Dummy_pa_full", "Dummy_hnv_visible", "Dummy_pa_no", "Dummy_hnv_no", "getZoom", "getZoomMax", "getTime", "hnv_att", "cost_att", "pa_att", "pref1"
-)
-all_data <- all_data %>%
-  mutate(across(all_of(DCE_var_names_to_clear), ~ NA))
-
-
-
-complete_data <- database %>% 
-  distinct(RID,.keep_all=TRUE) %>% 
-  filter(STATUS_recoded == "Complete") %>% filter(DURATION >= 1/3*median_dur,
-                                                  eval_attention_check == 4,
-                                                  !is.na(lat),
-                                                  !is.na(lon)
-  )
-
-rm(read_cov, survey_round_map, all_data_complete)
-
+# Clean up
+rm(list = c("unanon_results", "anon_results"))
 
 
 
 ##### Combining with secondary data to review if exclusion criterion "residence in Germany" applies
 
 # A: Creating a correct shapefile with all municipalities of Germany
-# Load incomplete/erroneous Germany admin shapefile
-germany_admin <- read_sf("secondary_data/germany_shapefiles/", "gadm41_DEU_4") %>%
-  select(NAME_1, NAME_2, NAME_3, NAME_4, CC_4) %>%
-  st_transform(4326)
 
-# Load data to fill the gap in germany_admin
-## 1. Manual list of ARS codes of missing SH municipalities - identified via cross-checking germany_admin map and Geoportal + ARS-Tool
-ars_codes <- c(
-  "010595990164","010595990148","010595990112","010595990121",
-  "010595990142","010595990147","010595990152","010595990136",
-  "010590045045","010595990154"
-)
+# Create folder if needed
+dir.create("intermediate_data", showWarnings = FALSE, recursive = TRUE)
 
-## 2. Load the belonging indications (State District Municipality) from ALKIS
-sh_alkis <- read_sf("secondary_data/ALKIS/", "KommunalesGebiet_Gemeinden_ALKIS") %>%
-  select(SCHLGMD, LAND, KREIS, AMT) %>%
-  mutate(AMT = str_remove(AMT, "^Amt\\s+|^amtsfreie Gemeinde\\s+")) %>%
-  st_set_geometry(NULL)
+if (file.exists("intermediate_data/germany_admin_corrected.rds")) {
+  
+  # --- Load cached object ---
+  germany_admin_corrected <- readRDS("intermediate_data/germany_admin_corrected.rds")
+  
+} else {
+  
+  ##### Combining with secondary data to review if exclusion criterion "residence in Germany" applies
+  
+  # A: Creating a correct shapefile with all municipalities of Germany
+  # Load incomplete/erroneous Germany admin shapefile
+  germany_admin <- read_sf("secondary_data/germany_shapefiles/", "gadm41_DEU_4") %>%
+    select(NAME_1, NAME_2, NAME_3, NAME_4, CC_4) %>%
+    st_transform(4326)
+  
+  # Load data to fill the gap in germany_admin
+  ## 1. Manual list of ARS codes of missing SH municipalities
+  ars_codes <- c(
+    "010595990164","010595990148","010595990112","010595990121",
+    "010595990142","010595990147","010595990152","010595990136",
+    "010590045045","010595990154"
+  )
+  
+  ## 2. Load ALKIS belonging indications
+  sh_alkis <- read_sf("secondary_data/ALKIS/", "KommunalesGebiet_Gemeinden_ALKIS") %>%
+    select(SCHLGMD, LAND, KREIS, AMT) %>%
+    mutate(AMT = str_remove(AMT, "^Amt\\s+|^amtsfreie Gemeinde\\s+")) %>%
+    st_set_geometry(NULL)
+  
+  ## 3. Load belonging polygons from Geoportal
+  geoportal_sf <- read_sf("secondary_data/vg250_gem/", "vg250_gem") %>%
+    filter(ars %in% ars_codes & !grepl("^DEBKGVG2000008I", objid)) %>%
+    st_transform(4326)
+  
+  # Prepare updated/replacement polygons
+  to_replace <- germany_admin %>%
+    filter(CC_4 %in% geoportal_sf$ars) %>%
+    st_set_geometry(NULL) %>%
+    left_join(geoportal_sf %>% select(CC_4 = ars, geometry), by = "CC_4") %>%
+    st_as_sf()
+  
+  # New entries from Geoportal not in germany_admin
+  new_entries <- geoportal_sf %>%
+    filter(!ars %in% germany_admin$CC_4) %>%
+    rename(CC_4 = ars) %>%
+    mutate(AGS_4 = sub("^(.{5}).{4}(.{3})$", "\\1\\2", CC_4)) %>%
+    left_join(sh_alkis, by = c("AGS_4" = "SCHLGMD")) %>%
+    transmute(NAME_1 = LAND, NAME_2 = KREIS, NAME_3 = AMT, NAME_4 = gen, CC_4, geometry) %>%
+    distinct() %>%
+    st_as_sf()
+  
+  # Combine kept, replaced, and new polygons
+  germany_admin_corrected <- bind_rows(
+    germany_admin %>% filter(!CC_4 %in% geoportal_sf$ars),
+    to_replace,
+    new_entries
+  )
+  
+  # Clean up intermediate objects
+  rm(germany_admin, geoportal_sf, sh_alkis, to_replace, new_entries)
+  
+  # --- Save result to cache ---
+  saveRDS(germany_admin_corrected)
+}
 
-## 3. Load the belonging polygons for the missing municipalities from Geoportal
-geoportal_sf <- read_sf("secondary_data/vg250_gem/", "vg250_gem") %>%
-  filter(ars %in% ars_codes & !grepl("^DEBKGVG2000008I", objid)) %>%
-  st_transform(4326)
-
-# Prepare updated/replacement polygons
-to_replace <- germany_admin %>%
-  filter(CC_4 %in% geoportal_sf$ars) %>%
-  st_set_geometry(NULL) %>%
-  left_join(geoportal_sf %>% select(CC_4 = ars, geometry), by = "CC_4") %>%
-  st_as_sf()
-
-# New entries from Geoportal not in germany_admin
-new_entries <- geoportal_sf %>%
-  filter(!ars %in% germany_admin$CC_4) %>%
-  rename(CC_4 = ars) %>%
-  mutate(AGS_4 = sub("^(.{5}).{4}(.{3})$", "\\1\\2", CC_4)) %>%
-  left_join(sh_alkis, by = c("AGS_4" = "SCHLGMD")) %>%
-  transmute(NAME_1 = LAND, NAME_2 = KREIS, NAME_3 = AMT, NAME_4 = gen, CC_4, geometry) %>%
-  distinct() %>%
-  st_as_sf()
-
-# Combine kept, replaced, and new polygons
-germany_admin_corrected <- bind_rows(
-  germany_admin %>% filter(!CC_4 %in% geoportal_sf$ars),
-  to_replace,
-  new_entries
-)
-
-# Clean up
-rm(germany_admin, geoportal_sf, sh_alkis, to_replace, new_entries)
 
 
 # B: Assign administrative names to all observations of complete_data by spatial join - based on lat,lon
+assign_admin_areas <- function(all_data_input, germany_admin_corrected) {
+  # Copy the input dataset (either all_data_unanon or all_data_anon) to all_data
+  all_data <- all_data_input
+  
+  # Prepare points: Keep only observations with valid geolocations
+  points_sf <- all_data %>%
+    filter(!is.na(lat), !is.na(lon)) %>%
+    st_as_sf(coords = c("lon", "lat"), crs = 4326)
+  
+  # Keep only relevant polygon columns for join
+  admin_sf <- germany_admin_corrected %>%
+    select(CC_4, NAME_1, NAME_2, NAME_3, NAME_4)
+  
+  # Spatial join: Assign administrative areas to points
+  admin_assignments <- points_sf %>%
+    st_join(admin_sf, join = st_within, left = FALSE) %>%
+    st_drop_geometry() %>%
+    rename(
+      federal_state   = NAME_1,
+      county_name     = NAME_2,
+      municipality_name = NAME_3,
+      town_name       = NAME_4,
+      ARS             = CC_4
+    ) %>%
+    select(RID, federal_state, county_name, municipality_name, town_name, ARS)
+  
+  # Join assignments back to all_data
+  all_data <- all_data %>%
+    left_join(admin_assignments, by = "RID")
+  
+  return(all_data)
+}
 
-# Prepare points: Keeping all observations with geolocation of residence
-points_sf <- complete_data %>%
-  filter(!is.na(lat), !is.na(lon)) %>%
-  st_as_sf(coords = c("lon", "lat"), crs = 4326)
 
-# Keep only relevant polygon columns for join
-admin_sf <- germany_admin_corrected %>%
-  select(CC_4, NAME_1, NAME_2, NAME_3, NAME_4)
 
-# Spatial join: points inside polygons
-admin_assignments <- st_join(points_sf, admin_sf, join = st_within, left = FALSE) %>%
-  st_drop_geometry() %>%
-  rename(
-    federal_state   = NAME_1,
-    county_name     = NAME_2,
-    municipality_name = NAME_3,
-    town_name       = NAME_4,
-    ARS             = CC_4
-  ) %>%
-  select(RID, federal_state, county_name, municipality_name, town_name, ARS)
+### Apply assign_admin_areas only if objects exist -----------------------------
+# For unanon
+if (exists("all_data_unanon")) {
+  all_data_unanon <- assign_admin_areas(all_data_unanon, germany_admin_corrected)
+}
+# For anon
+if (exists("all_data_anon")) {
+  all_data_anon <- assign_admin_areas(all_data_anon, germany_admin_corrected)
+}
 
-complete_data <- complete_data %>% left_join(admin_assignments, by = "RID")
+### Create admin assignment tables ---------------------------------------------
+# anon admin assignments
+if (exists("all_data_anon")) {
+  anon_admin_assignments <- all_data_anon %>%
+    dplyr::select(RID, federal_state, county_name, municipality_name, town_name, ARS)
+}
+# unanon admin assignments
+if (exists("all_data_unanon")) {
+  unanon_admin_assignments <- all_data_unanon %>%
+    dplyr::select(RID, federal_state, county_name, municipality_name, town_name, ARS)
+}
 
-rm(admin_assignments, admin_sf, germany_admin_corrected, points_sf)
+### Merge assignments into complete_data + database ----------------------------
+# For anon
+if (exists("complete_data_anon") && exists("anon_admin_assignments")) {
+  complete_data_anon <- complete_data_anon %>%
+    left_join(anon_admin_assignments, by = "RID")
+}
+if (exists("database_anon") && exists("anon_admin_assignments")) {
+  database_anon <- database_anon %>%
+    left_join(anon_admin_assignments, by = "RID")
+}
+# For unanon  
+if (exists("complete_data_unanon") && exists("unanon_admin_assignments")) {
+  complete_data_unanon <- complete_data_unanon %>%
+    left_join(unanon_admin_assignments, by = "RID")
+}
+if (exists("database_unanon") && exists("unanon_admin_assignments")) {
+  database_unanon <- database_unanon %>%
+    left_join(unanon_admin_assignments, by = "RID")
+}
+
+rm(anon_admin_assignments, unanon_admin_assignments)
+
+
 
 
 ### EJECTING OBSOLETE VARS ####
@@ -595,7 +717,23 @@ vars_wo_relevance <- c(
   "hnv_miss_group", "hnv_corr_group", "visited_nature_last12m_alt"
 )
 
-vars_dce_group <- grep("^dce_[a-j]", names(all_data), value = TRUE)
+# Check which dataset to use, prioritizing all_data_anon if both exist
+if (exists("all_data_anon")) {
+  data_to_use <- all_data_anon
+  message("Using all_data_anon")
+} else if (exists("all_data_unanon")) {
+  data_to_use <- all_data_unanon
+  message("Using all_data_unanon")
+} else {
+  stop("Neither all_data_anon nor all_data_unanon exists in the environment.")
+}
+
+# Now use data_to_use instead of all_data
+vars_dce_group <- grep("^dce_[a-j]", names(data_to_use), value = TRUE)
+
+
+# Now use data_to_use instead of all_data
+vars_dce_group <- grep("^dce_[a-j]", names(data_to_use), value = TRUE)
 
 vars_obsolete_from_recode <- c(
   "gender_chr", "gender_male",
@@ -639,95 +777,167 @@ remove_vars <- function(df, vars_to_remove) {
   return(df)
 }
 
-# Apply to all datasets
-all_data <- remove_vars(all_data, all_vars_to_remove)
-complete_data <- remove_vars(complete_data, all_vars_to_remove)
-database <- remove_vars(database, all_vars_to_remove)
+# Apply remove_vars only if the objects exist
+for (obj in c(
+  "all_data_anon", "complete_data_anon", "database_anon",
+  "all_data_unanon", "complete_data_unanon", "database_unanon"
+)) {
+  if (exists(obj)) {
+    assign(obj, remove_vars(get(obj), all_vars_to_remove))
+  }
+}
 
 
 
 
-## save and upload data
+# Only run the geolocation exclusion logic if 'all_data_unanon' exists
+if (exists("all_data_unanon")) {
+  # Assign the unanonymized dataframes
+  all_data <- all_data_unanon
+  complete_data <- complete_data_unanon
+  database <- database_unanon
+  
+  ##### Running geolocation_unanon.R first
+  source("~/git_repos/ValuGaps_Data/geolocations_unanon.R")
+  
+  # Load geoexclusions
+  geoexclusions <- readRDS(file.path("intermediate_data/unanonymized_geolocations", "geolocation_exlusions.rds"))
+  
+  # Join geoexclusions to all_data, complete_data, and database
+  all_data <- all_data %>%
+    left_join(geoexclusions %>% select(RID, geoexclusion), by = "RID")
+  
+  complete_data <- complete_data %>%
+    left_join(geoexclusions %>% select(RID, geoexclusion), by = "RID")
+  
+  database <- database %>%
+    left_join(geoexclusions %>% select(RID, geoexclusion), by = "RID")
+  
+  # Removing the geolocations of the residences for those outside of Germany
+  all_data <- all_data %>%
+    mutate(
+      lat = ifelse(geoexclusion == TRUE, NA, lat),
+      lon = ifelse(geoexclusion == TRUE, NA, lon)
+    )
+  
+  # Ejecting the observations from our core sample (complete_data and database) if the residences are outside of Germany
+  complete_data <- complete_data %>%
+    filter(geoexclusion != TRUE)
+  
+  database <- database %>%
+    filter(geoexclusion != TRUE)
+}
 
-dir.create("finaldata", showWarnings = FALSE) 
-
-
-save(
-  complete_data, all_data, database,
-  file = "finaldata/all_datasets.RData",
-  compress = "gzip",              # strongest compression
-  compression_level = 9,        # highest level (slowest, but smallest)
-  version = 3                   # modern serialization
-)
+saveRDS(germany_admin_corrected, file = "intermediate_data/germany_admin_corrected.rds")
+rm(all_data_unanon,complete_data_unanon, database_unanon, geoexclusions)
 
 
 ### WRITE CSV ##########
-
-# --- WRITE CSVs AND SPEC FILES ---
-options(readr.num_columns = "I") 
-
-write_csv_custom <- function(df, file) {
-  readr::write_csv(
-    dplyr::mutate_if(df, is.numeric, ~ format(., scientific = FALSE, digits = 15)),
-    file = file,
-    na = "NA",
-    escape = "double"
+export_final_data <- function(output_folder) {
+  
+  # --- Create folder if needed ---
+  dir.create(output_folder, showWarnings = FALSE, recursive = TRUE)
+  
+  # --- Save RData bundle ---
+  rdata_file <- file.path(output_folder, "all_datasets.RData")
+  
+  save(
+    complete_data, all_data, database,
+    file = rdata_file,
+    compress = "gzip",
+    compression_level = 9,
+    version = 3
   )
-  spec <- readr::spec(df)
-  saveRDS(spec, paste0(file, ".spec.rds"))
-  return(c(file, paste0(file, ".spec.rds")))  # return paths of CSV + spec
+  
+  # --- CSV writer (custom formatting for numeric fields) ---
+  write_csv_custom <- function(df, file) {
+    readr::write_csv(
+      dplyr::mutate_if(df, is.numeric, ~ format(., scientific = FALSE, digits = 15)),
+      file = file,
+      na = "NA",
+      escape = "double"
+    )
+    spec <- readr::spec(df)
+    spec_file <- paste0(file, ".spec.rds")
+    saveRDS(spec, spec_file)
+    return(c(file, spec_file))
+  }
+  
+  # --- Write all CSVs + specs ---
+  options(readr.num_columns = "I")
+  
+  csv_complete <- write_csv_custom(complete_data, file.path(output_folder, "complete_data.csv"))
+  csv_all      <- write_csv_custom(all_data,      file.path(output_folder, "all_data.csv"))
+  csv_db       <- write_csv_custom(database,      file.path(output_folder, "database.csv"))
+  
+  all_files <- c(csv_complete, csv_all, csv_db)
+  
+  # --- ZIP everything ---
+  zip_file <- file.path(output_folder, "all_datasets_zip.zip")
+  zip(zipfile = zip_file, files = all_files, flags = "-j")
+  
+  return(
+    list(
+      rdata = rdata_file,
+      csv_and_specs = all_files,
+      zip = zip_file
+    )
+  )
 }
 
-# Write all CSVs + specs and capture file paths
-all_files <- c(
-  write_csv_custom(complete_data, "finaldata/complete_data.csv"),
-  write_csv_custom(all_data, "finaldata/all_data.csv"),
-  write_csv_custom(database, "finaldata/database.csv")
-)
+if (all(c("all_data", "complete_data", "database") %in% ls())) {
+  export_final_data("finaldata_unanon")
+}
 
-# --- CREATE ZIP ARCHIVE ---
-zip_file <- "finaldata/all_datasets_zip.zip"
-zip(zipfile = zip_file, files = all_files, flags = "-j") 
+if (all(c("all_data_anon", "complete_data_anon", "database_anon") %in% ls())) {
+  all_data <- all_data_anon
+  complete_data <- complete_data_anon
+  database <- database_anon
+  export_final_data("finaldata_anon")
+}
 
-# # Write CSVs compressed with gzip
-# write_csv_custom_gz <- function(df, file) {
-#   gzfile_path <- paste0(file, ".gz")  # add .gz extension
-#   readr::write_csv(
-#     dplyr::mutate_if(df, is.numeric, ~ format(., scientific = FALSE, digits = 15)),
-#     file = gzfile(gzfile_path),
-#     na = "NA",
-#     escape = "double"
+
+
+
+
+# # --- UPLOAD TO OSF -----------------------
+# upload_to_osf <- function(node_id, file_path) {
+#   node <- osf_retrieve_node(node_id)
+#   
+#   osf_upload(
+#     node,
+#     path = file_path,
+#     recurse = TRUE,
+#     progress = TRUE,
+#     verbose = TRUE,
+#     conflicts = "override"
 #   )
-#   spec <- readr::spec(df)
-#   saveRDS(spec, paste0(file, ".spec.rds"))
-#   return(gzfile_path)
 # }
-
-# # Write and compress
-# compressed_files <- c(
-#   write_csv_custom_gz(complete_data, "finaldata/complete_data.csv"),
-#   write_csv_custom_gz(all_data, "finaldata/all_data.csv"),
-#   write_csv_custom_gz(database, "finaldata/database.csv")
-# )
-
-
-# --- UPLOAD TO OSF ---
-library(osfr)
-osf_node <- osf_retrieve_node("g7eac")
-
-osf_upload(
-  osf_node,
-  path = zip_file,
-  recurse = TRUE,
-  progress = TRUE,
-  verbose = TRUE,
-  conflicts = "override"
-)
-
-osf_retrieve_node("g7eac")  %>%
-    osf_upload(path = "finaldata/all_datasets.RData",recurse = TRUE, progress = TRUE, verbose = TRUE, conflicts = "override")
-
-
+# 
+# # Helper function for yes/no confirmation
+# ask_yes_no <- function(prompt = "Proceed? (y/n): ") {
+#   ans <- tolower(trimws(readline(prompt)))
+#   ans %in% c("y", "yes")
+# }
+# 
+# # --- Unanon uploads ---
+# if (dir.exists("finaldata_unanon")) {
+#   if (ask_yes_no("Upload UNANON data to OSF? (y/n): ")) {
+#     upload_to_osf("34smc", zip_file)
+#     upload_to_osf("34smc", "finaldata_unanon/all_datasets.RData")
+#   }
+# }
+# 
+# # --- Anon uploads ---
+# if (dir.exists("finaldata_anon")) {
+#   if (ask_yes_no("Upload ANON data to OSF? (y/n): ")) {
+#     upload_to_osf("g7eac", zip_file)
+#     upload_to_osf("g7eac", "finaldata_anon/all_datasets.RData")
+#   }
+# }
+# 
+# 
+# 
 
 # #### READ ###########
 # read_csv_from_zip <- function(zip_file, csv_name, timestamp_cols = c("DATETIME.UTC", "anonymized_on")) {
